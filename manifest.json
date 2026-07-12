@@ -1,6 +1,6 @@
 {
-  "name": "Bíblia Sagrada JFA Offline",
-  "short_name": "Bíblia JFA",
+  "name": "Bíblia JFA Offline",
+  "short_name": "Bíblia JFA Offline",
   "description": "Bíblia Sagrada João Ferreira de Almeida — Leitura, destaques, anotações e voz.",
   "start_url": "./index.html",
   "scope": "./",

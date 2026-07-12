@@ -1,0 +1,10 @@
+{
+  "appId": "com.biblia.offline",
+  "appName": "Bíblia JFA Offline",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "minWebViewVersion": 60,
+    "backgroundColor": "#0d0a08"
+  }
+}
