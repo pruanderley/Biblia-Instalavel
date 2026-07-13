@@ -98,10 +98,17 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onBackPressed() {
-        // Chama função JS handleBack() em vez de sair direto
-        runOnUiThread(() -> webView.evaluateJavascript(
-            "if(typeof window.handleBack==='function'){window.handleBack();}",
-            null));
+        // Chama handleBack() no JS — se retornar false, fecha o app
+        getBridge().getWebView().evaluateJavascript(
+            "(function(){ return typeof window.handleBack==='function' ? window.handleBack() : false; })()",
+            value -> {
+                if ("false".equals(value)) {
+                    runOnUiThread(() -> {
+                        finishAffinity();
+                        System.exit(0);
+                    });
+                }
+            });
     }
 
     @Override

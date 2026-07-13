@@ -5367,7 +5367,7 @@ function hp_closeCredits() {
   if (modal) modal.style.display = 'none';
 }
 
-// ── ADIÇÃO: Diálogo de saída da Harpa (corrigido com Sair e espaçamento) ──
+// ── ADIÇÃO: Diálogo de saída da Harpa ──────────────────
 function hp_confirmExit() {
   // Verifica se algum painel da Harpa está aberto e fecha antes de perguntar
   var menuPanel = document.getElementById('hp-menu-panel');
@@ -5395,54 +5395,36 @@ function hp_confirmExit() {
     'padding:28px 24px;max-width:300px;width:88%;text-align:center;">' +
       '<div style="font-size:28px;margin-bottom:8px;">🎵</div>' +
       '<div style="font-family:Cinzel,serif;font-size:14px;color:#b58cf0;' +
-      'letter-spacing:1px;margin-bottom:24px;">O QUE DESEJA FAZER?</div>' +
-      
-      // Botão Voltar para Bíblia
+      'letter-spacing:1px;margin-bottom:20px;">O QUE DESEJA FAZER?</div>' +
       '<button id="hp-exit-biblia" ' +
-      'style="width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px;' +
+      'style="width:100%;padding:13px;border-radius:12px;border:none;margin-bottom:10px;' +
       'background:linear-gradient(135deg,#b58cf0,#d4b8ff);color:#14101d;' +
       'font-family:Cinzel,serif;font-size:13px;font-weight:700;cursor:pointer;">' +
       '📖 Voltar para a Bíblia</button>' +
-      
-      // Botão Sair do Aplicativo (NOVO)
       '<button id="hp-exit-app" ' +
-      'style="width:100%;padding:14px;border-radius:12px;border:none;margin-bottom:12px;' +
-      'background:#a82525;color:#ffffff;font-family:Cinzel,serif;' +
-      'font-size:13px;font-weight:700;cursor:pointer;">' +
+      'style="width:100%;padding:13px;border-radius:12px;border:none;margin-bottom:10px;' +
+      'background:#2c2340;color:#ece6f7;border:1px solid #3a2e52;' +
+      'font-family:Cinzel,serif;font-size:13px;font-weight:700;cursor:pointer;">' +
       '🚪 Fechar Aplicativo</button>' +
-      
-      // Botão Cancelar
       '<button id="hp-exit-cancel" ' +
-      'style="width:100%;padding:12px;border-radius:12px;border:none;' +
+      'style="width:100%;padding:10px;border-radius:12px;border:none;' +
       'background:transparent;color:#8674a8;font-family:Lato,sans-serif;' +
-      'font-size:13px;cursor:pointer;margin-top:4px;">Cancelar</button>' +
+      'font-size:13px;cursor:pointer;">Cancelar</button>' +
     '</div>';
   document.getElementById('harpa-app').appendChild(d);
 
-  // Ação: Voltar para a Bíblia
   document.getElementById('hp-exit-biblia').addEventListener('click', function() {
     document.getElementById('hp-exit-dialog').remove();
     closeHarpa();
   });
-
-  // Ação: Sair do Aplicativo
   document.getElementById('hp-exit-app').addEventListener('click', function() {
     document.getElementById('hp-exit-dialog').remove();
-    // Tenta fechar via Android ou Capacitor
-    try {
-      if (typeof window.Android !== 'undefined' && typeof window.Android.exitApp === 'function') {
-        window.Android.exitApp();
-      } else if (typeof Capacitor !== 'undefined' && Capacitor.Plugins && Capacitor.Plugins.App) {
-        Capacitor.Plugins.App.exitApp();
-      } else {
-        window.close();
-      }
-    } catch(e) {
-      console.warn('Não foi possível fechar o app:', e);
+    if (typeof window.Android !== 'undefined' && typeof window.Android.exitApp === 'function') {
+      window.Android.exitApp();
+    } else if (typeof Capacitor !== 'undefined' && Capacitor.Plugins && Capacitor.Plugins.App) {
+      Capacitor.Plugins.App.exitApp();
     }
   });
-
-  // Ação: Cancelar
   document.getElementById('hp-exit-cancel').addEventListener('click', function() {
     document.getElementById('hp-exit-dialog').remove();
   });
@@ -5840,7 +5822,7 @@ function hp_fmtTime(sec){
 </script>
 
 <script>
-// ── BOTÃO VOLTAR — popstate (corrigido para sair da Bíblia) ──
+// ── BOTÃO VOLTAR — popstate (mesmo padrão do harpa.html original) ──
 window.addEventListener('popstate', function(e) {
   var state = e.state;
 
@@ -5850,6 +5832,7 @@ window.addEventListener('popstate', function(e) {
     if (state && state.harp) {
       _hp_suppressHistory = true;
       if (state.view === 'detail' && typeof state.index === 'number' && HP_DATA[state.index]) {
+        // Restaura hino
         hp_currentIndex = state.index;
         hp_renderDetail();
         hp_updatePlayingIndicator();
@@ -5857,6 +5840,7 @@ window.addEventListener('popstate', function(e) {
         document.getElementById('hp-detail').classList.add('active');
         document.getElementById('hp-content').scrollTop = 0;
       } else {
+        // Volta para lista
         _hp_backStack = [];
         document.getElementById('hp-list-wrap').classList.remove('hidden');
         document.getElementById('hp-detail').classList.remove('active');
@@ -5865,37 +5849,25 @@ window.addEventListener('popstate', function(e) {
       }
       _hp_suppressHistory = false;
     } else {
+      // Sem estado harp — fecha a Harpa
       closeHarpa();
     }
     return;
   }
 
-  // Painel aberto da Bíblia — fecha
+  // Painel aberto — fecha
   var openPanel = document.querySelector('.panel-overlay.open');
   if (openPanel && openPanel.id) {
     closePanel(openPanel.id);
-    // Não empurra outro estado para evitar loop
+    history.pushState({ biblia: true }, '', '#biblia');
     return;
   }
 
-  // Se não tiver nada aberto, pergunta se quer sair do app
+  // Confirmação de saída
+  history.pushState({ biblia: true }, '', '#biblia');
   if (confirm('Deseja sair do aplicativo?')) {
-    // Tenta fechar via Capacitor ou Android Bridge
-    try {
-      if (typeof window.Android !== 'undefined' && typeof window.Android.exitApp === 'function') {
-        window.Android.exitApp();
-      } else if (typeof Capacitor !== 'undefined' && Capacitor.Plugins && Capacitor.Plugins.App) {
-        Capacitor.Plugins.App.exitApp();
-      } else {
-        // Fallback para navegador
-        window.close();
-      }
-    } catch(e) {
-      console.warn('Não foi possível fechar o app:', e);
-    }
-  } else {
-    // Se cancelar, empurra um estado novo para não sair
-    history.pushState({ biblia: true }, '', '#biblia');
+    history.back();
+    history.back();
   }
 });
 
