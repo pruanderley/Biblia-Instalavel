@@ -75,6 +75,14 @@ public class MainActivity extends BridgeActivity {
         public void releaseWakeLock() {}
 
         @JavascriptInterface
+        public void exitApp() {
+            runOnUiThread(() -> {
+                finishAffinity();
+                System.exit(0);
+            });
+        }
+
+        @JavascriptInterface
         public void openUrl(String url) {
             runOnUiThread(() -> {
                 try {
