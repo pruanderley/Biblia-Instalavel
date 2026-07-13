@@ -2078,13 +2078,13 @@
   }
 
   .hp-menu-btn {
-    display: flex; align-items: center; gap: 18px;
-    width: 100%; padding: 18px 28px;
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; padding: 14px 24px;
     background: none; border: none; border-bottom: 1px solid var(--hp-border);
-    color: var(--hp-text); font-family: 'Lato', sans-serif; font-size: 19px;
+    color: var(--hp-text); font-family: 'Lato', sans-serif; font-size: 16px;
     cursor: pointer; text-align: left;
   }
-  .hp-menu-btn span:first-child { font-size: 24px; width: 32px; text-align: center; }
+  .hp-menu-btn span:first-child { font-size: 20px; width: 28px; text-align: center; }
   .hp-menu-btn:active { background: rgba(181,140,240,0.1); }
 
   #hp-toast {
@@ -3432,6 +3432,7 @@ function startVoice() {
   if (_hasAndroidBridge()) {
     try {
       if (window.Android.acquireWakeLock) window.Android.acquireWakeLock();
+      _requestWakeLock();
       ttsRunning = true;
       _startIosAudioSession();
       _setVoicePlayingUI(true, '▶ ' + book.name + ' ' + (currentChapter + 1) + ' — ' + _ttsCount + ' versículos');
@@ -3451,6 +3452,7 @@ function startVoice() {
     try { window.speechSynthesis.cancel(); } catch(e) {}
 
     ttsRunning = true;
+    _requestWakeLock();
     _startIosAudioSession();
     _setVoicePlayingUI(true, '▶ ' + book.name + ' ' + (currentChapter + 1) + ' — ' + _ttsCount + ' versículos');
     _startTtsKeepalive();
@@ -3598,6 +3600,7 @@ function stopVoice() {
   }
   try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch(e) {}
   _stopIosAudioSession();
+  _releaseWakeLock();
   ttsContinuous = false;
   const toggle = document.getElementById('toggle-continuous');
   if (toggle) toggle.classList.remove('on');
@@ -3788,6 +3791,25 @@ function ttsdiag() {
 // ── VISIBILIDADE / BACKGROUND ─────────────────
 // Quando o usuário sai do app (tela apaga, muda de aba),
 // o WebView pausa o speechSynthesis. Retomamos ao voltar.
+// ── WAKELOCK — mantém leitura ativa com tela apagada ──
+var _wakeLock = null;
+async function _requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      _wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch(e) {}
+}
+function _releaseWakeLock() {
+  try { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } } catch(e) {}
+}
+// Reaquire wakeLock quando volta ao primeiro plano
+document.addEventListener('visibilitychange', async () => {
+  if (_wakeLock !== null && document.visibilityState === 'visible' && ttsRunning) {
+    await _requestWakeLock();
+  }
+});
+
 document.addEventListener('visibilitychange', () => {
   if (!ttsRunning) return;
   if (!document.hidden) {
@@ -3804,6 +3826,10 @@ document.addEventListener('visibilitychange', () => {
   } else {
     // Tela apagando — reforça sessão de áudio iOS
     if (_isIOS()) _startIosAudioSession();
+    // Android: keepalive do speechSynthesis
+    if (!_isIOS() && _hasWebSpeech()) {
+      try { window.speechSynthesis.resume(); } catch(e) {}
+    }
   }
 });
 
