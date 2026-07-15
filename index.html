@@ -2022,6 +2022,57 @@
     font-family: 'Lato', sans-serif; font-size: 11.5px; color: var(--hp-muted);
   }
 
+  /* ── FAVORITOS E COMPARTILHAR DA HARPA ── */
+  .hp-hymn-item {
+    position: relative;
+  }
+  .hp-hymn-fav {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    flex-shrink: 0;
+    opacity: 0.5;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .hp-hymn-fav.active { opacity: 1; }
+  .hp-hymn-fav:active { transform: scale(1.3); }
+
+  /* Painel de cores da Harpa */
+  #hp-color-panel {
+    position: absolute; inset: 0; z-index: 400;
+    display: none; align-items: flex-end;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  }
+  #hp-color-panel.open { display: flex; }
+  #hp-color-panel .hp-panel-inner {
+    background: var(--hp-bg2); border-top: 2px solid var(--hp-accent);
+    border-radius: 20px 20px 0 0; width: 100%; padding: 0 0 30px;
+    animation: slideUp 0.3s ease;
+  }
+  .hp-color-grid {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    padding: 16px 20px; justify-content: center;
+  }
+  .hp-color-swatch {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 3px solid transparent; cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .hp-color-swatch:active { transform: scale(0.9); }
+  .hp-color-swatch.active { border-color: #fff; transform: scale(1.15); }
+  .hp-color-swatch[data-hpcolor="none"] {
+    background: var(--hp-card); border: 2px dashed var(--hp-border);
+    position: relative;
+  }
+  .hp-color-swatch[data-hpcolor="none"]::after {
+    content: '✕'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--hp-muted); font-size: 16px;
+  }
+
   /* Indicador "Tocando agora" no detalhe do hino */
   #hp-playing-indicator {
     display: none;
@@ -5157,8 +5208,26 @@ function installPWA() {
 
     <div id="hp-detail">
       <div id="hp-hymn-hdr">
-        <div id="hp-hymn-num-hdr"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div id="hp-hymn-num-hdr"></div>
+          <div style="display:flex;gap:6px;">
+            <button id="hp-detail-fav" onclick="hp_openColorPanel()" title="Favoritar"
+              style="background:none;border:1px solid var(--hp-border);border-radius:8px;
+              font-size:15px;cursor:pointer;padding:5px 10px;color:var(--hp-text2);
+              font-family:'Lato',sans-serif;">🤍</button>
+            <button onclick="hp_shareHymn()" title="Compartilhar"
+              style="background:none;border:1px solid var(--hp-border);border-radius:8px;
+              font-size:15px;cursor:pointer;padding:5px 10px;color:var(--hp-text2);
+              font-family:'Lato',sans-serif;display:flex;align-items:center;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+            </button>
+          </div>
+        </div>
         <div id="hp-hymn-title-hdr"></div>
+
         <div id="hp-playing-indicator">
           <div class="hp-bars" id="hp-bars">
             <span></span><span></span><span></span><span></span>
@@ -5189,6 +5258,7 @@ function installPWA() {
       <div style="width:50px;height:5px;background:var(--hp-border);border-radius:3px;margin:14px auto 10px;"></div>
       <div style="font-family:'Cinzel',serif;font-size:18px;color:var(--hp-accent);letter-spacing:2px;text-align:center;padding:10px 0 20px;">🎵 HARPA CRISTÃ</div>
       <button class="hp-menu-btn" onclick="hp_closeMenu();hp_showList()"><span>🎵</span><span>Lista de Hinos</span></button>
+      <button class="hp-menu-btn" onclick="hp_closeMenu();hp_showFavorites()"><span>❤️</span><span>Hinos Favoritos</span></button>
       <button class="hp-menu-btn" onclick="hp_closeMenu();hp_openSettings()"><span>⚙️</span><span>Configurações</span></button>
       <button class="hp-menu-btn" onclick="hp_closeMenu();hp_toggleTheme()"><span>🌙</span><span id="hp-theme-label">Tema Escuro / Claro</span></button>
       <div style="height:1px;background:var(--hp-border);margin:8px 20px;"></div>
@@ -5264,6 +5334,29 @@ function installPWA() {
         font-family:'Cinzel',serif;font-size:13px;font-weight:700;
         letter-spacing:1px;cursor:pointer;
       ">FECHAR</button>
+    </div>
+  </div>
+
+  <!-- PAINEL DE CORES DA HARPA -->
+  <div id="hp-color-panel" onclick="if(event.target===this)hp_closeColorPanel()">
+    <div class="hp-panel-inner">
+      <div class="hp-panel-handle"></div>
+      <div class="hp-panel-title">🎨 COR DO FAVORITO</div>
+      <button class="hp-panel-close" onclick="hp_closeColorPanel()">✕</button>
+      <div class="hp-color-grid" id="hp-color-grid"></div>
+      <div style="text-align:center;padding:0 20px 8px;">
+        <button onclick="hp_shareHymn()" style="
+          width:100%;padding:13px;border-radius:12px;border:none;
+          background:var(--hp-card);color:var(--hp-text);border:1px solid var(--hp-border);
+          font-family:Lato,sans-serif;font-size:14px;cursor:pointer;margin-top:8px;
+          display:flex;align-items:center;justify-content:center;gap:8px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          Compartilhar este Hino
+        </button>
+      </div>
     </div>
   </div>
 
@@ -5367,29 +5460,94 @@ function hp_closeCredits() {
   if (modal) modal.style.display = 'none';
 }
 
-// ── NOVO: hp_navBack simplificado (volta direto para Bíblia) ──
+// ── ADIÇÃO: Diálogo de saída da Harpa ──────────────────
+function hp_confirmExit() {
+  // Verifica se algum painel da Harpa está aberto e fecha antes de perguntar
+  var menuPanel = document.getElementById('hp-menu-panel');
+  if (menuPanel && menuPanel.style.display === 'flex') {
+    hp_closeMenu();
+    return false; // Não prossegue, apenas fecha o menu
+  }
+
+  var settingsPanel = document.getElementById('hp-settings-panel');
+  if (settingsPanel && settingsPanel.style.display === 'flex') {
+    hp_closeSettings();
+    return false; // Não prossegue, apenas fecha as configurações
+  }
+
+  // Diálogo com 3 opções
+  var ex = document.getElementById('hp-exit-dialog');
+  if (ex) { ex.remove(); return false; }
+
+  var d = document.createElement('div');
+  d.id = 'hp-exit-dialog';
+  d.style.cssText = 'position:absolute;inset:0;z-index:500;display:flex;' +
+    'align-items:center;justify-content:center;background:rgba(0,0,0,0.75);';
+  d.innerHTML =
+    '<div style="background:#1c1628;border:1px solid #b58cf0;border-radius:20px;' +
+    'padding:28px 24px;max-width:300px;width:88%;text-align:center;">' +
+      '<div style="font-size:28px;margin-bottom:8px;">🎵</div>' +
+      '<div style="font-family:Cinzel,serif;font-size:14px;color:#b58cf0;' +
+      'letter-spacing:1px;margin-bottom:20px;">O QUE DESEJA FAZER?</div>' +
+      '<button id="hp-exit-biblia" ' +
+      'style="width:100%;padding:13px;border-radius:12px;border:none;margin-bottom:10px;' +
+      'background:linear-gradient(135deg,#b58cf0,#d4b8ff);color:#14101d;' +
+      'font-family:Cinzel,serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+      '📖 Voltar para a Bíblia</button>' +
+      '<button id="hp-exit-app" ' +
+      'style="width:100%;padding:13px;border-radius:12px;border:none;margin-bottom:10px;' +
+      'background:#2c2340;color:#ece6f7;border:1px solid #3a2e52;' +
+      'font-family:Cinzel,serif;font-size:13px;font-weight:700;cursor:pointer;">' +
+      '🚪 Fechar Aplicativo</button>' +
+      '<button id="hp-exit-cancel" ' +
+      'style="width:100%;padding:10px;border-radius:12px;border:none;' +
+      'background:transparent;color:#8674a8;font-family:Lato,sans-serif;' +
+      'font-size:13px;cursor:pointer;">Cancelar</button>' +
+    '</div>';
+  document.getElementById('harpa-app').appendChild(d);
+
+  document.getElementById('hp-exit-biblia').addEventListener('click', function() {
+    document.getElementById('hp-exit-dialog').remove();
+    closeHarpa();
+  });
+  document.getElementById('hp-exit-app').addEventListener('click', function() {
+    document.getElementById('hp-exit-dialog').remove();
+    if (typeof window.Android !== 'undefined' && typeof window.Android.exitApp === 'function') {
+      window.Android.exitApp();
+    } else if (typeof Capacitor !== 'undefined' && Capacitor.Plugins && Capacitor.Plugins.App) {
+      Capacitor.Plugins.App.exitApp();
+    }
+  });
+  document.getElementById('hp-exit-cancel').addEventListener('click', function() {
+    document.getElementById('hp-exit-dialog').remove();
+  });
+  return false;
+}
+
+// ── SOBRESCREVER A FUNÇÃO hp_navBack (Botão Voltar) ──
+// Substitua a função antiga por esta, usando o diálogo acima
 function hp_navBack() {
-  // 1. Se estiver no menu ou configurações, apenas fecha
+  // 1. Se estiver no menu, fecha o menu
   var menuPanel = document.getElementById('hp-menu-panel');
   if (menuPanel && menuPanel.style.display === 'flex') {
     hp_closeMenu();
     return;
   }
+
+  // 2. Se estiver nas configurações, fecha as configurações
   var settingsPanel = document.getElementById('hp-settings-panel');
   if (settingsPanel && settingsPanel.style.display === 'flex') {
     hp_closeSettings();
     return;
   }
 
-  // 2. Se estiver vendo um hino em detalhe
+  // 3. Se estiver vendo um hino (detalhe), volta hino por hino pela pilha
   var detail = document.getElementById('hp-detail');
   if (detail && detail.classList.contains('active')) {
-    // Verifica se há pilha de volta
     if (_hp_backStack.length > 0) {
       var prev = _hp_backStack.pop();
       if (prev === 'list') {
         hp_showList();
-        return;
       } else {
         hp_currentIndex = prev;
         hp_renderDetail();
@@ -5397,23 +5555,92 @@ function hp_navBack() {
         document.getElementById('hp-list-wrap').classList.add('hidden');
         document.getElementById('hp-detail').classList.add('active');
         document.getElementById('hp-content').scrollTop = 0;
-        return;
       }
+    } else {
+      // Pilha vazia — verifica se há hino tocando diferente do atual
+      var player = document.getElementById('hp-audio-player');
+      var playingNum = player ? player.dataset.hymnNumero : null;
+      if (playingNum) {
+        // Acha o índice do hino tocando
+        var playingIdx = -1;
+        for (var i = 0; i < HP_DATA.length; i++) {
+          if (String(HP_DATA[i].numero) === String(playingNum)) { playingIdx = i; break; }
+        }
+        if (playingIdx >= 0 && playingIdx !== hp_currentIndex) {
+          // Volta para o hino que está tocando
+          hp_currentIndex = playingIdx;
+          hp_renderDetail();
+          hp_updatePlayingIndicator();
+          document.getElementById('hp-list-wrap').classList.add('hidden');
+          document.getElementById('hp-detail').classList.add('active');
+          document.getElementById('hp-content').scrollTop = 0;
+          return;
+        }
+      }
+      // Sem pilha e sem hino tocando — volta para lista
+      hp_showList();
     }
-    // Sem pilha → volta para a lista
-    hp_showList();
     return;
   }
 
-  // 3. Se estiver na lista, volta DIRETO para a Bíblia (sem perguntar)
+  // 4. Se estiver na lista de hinos, pergunta se quer sair
   if (document.getElementById('hp-list-wrap') && 
       !document.getElementById('hp-list-wrap').classList.contains('hidden')) {
-    closeHarpa(); // ← direto, sem diálogo
+    hp_confirmExit(); // Chama o diálogo
     return;
   }
 
-  // 4. Fallback: sai para a Bíblia
+  // 5. Caso não se encaixe em nada acima (segurança), sai para a Bíblia
   closeHarpa();
+}
+
+function hp_showFavorites() {
+  var favNums = Object.keys(hp_favorites);
+  if (favNums.length === 0) {
+    hp_showList();
+    // Toast
+    var t = document.getElementById('hp-toast');
+    if (t) {
+      t.textContent = '🤍 Nenhum hino favorito ainda';
+      t.classList.add('show');
+      setTimeout(function(){ t.classList.remove('show'); }, 2000);
+    }
+    return;
+  }
+
+  // Mostrar só os favoritos
+  var listEl = document.getElementById('hp-hymn-list');
+  var emptyEl = document.getElementById('hp-empty');
+  listEl.innerHTML = '';
+  emptyEl.style.display = 'none';
+
+  document.getElementById('hp-list-wrap').classList.remove('hidden');
+  document.getElementById('hp-detail').classList.remove('active');
+  document.getElementById('hp-title').textContent = '❤️ Hinos Favoritos';
+  document.getElementById('hp-content').scrollTop = 0;
+
+  var frag = document.createDocumentFragment();
+  HP_DATA.forEach(function(h, idx) {
+    var color = hp_favorites[h.numero];
+    if (!color) return;
+    var item = document.createElement('div');
+    item.className = 'hp-hymn-item';
+    item.innerHTML =
+      '<div class="hp-hymn-num" style="color:'+color+'">'+h.numero+'</div>' +
+      '<div class="hp-hymn-title">'+hp_esc(h.titulo)+'</div>' +
+      '<button class="hp-hymn-fav active" style="color:'+color+'">❤️</button>';
+    var favBtn = item.querySelector('.hp-hymn-fav');
+    favBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      hp_currentIndex = idx;
+      hp_openColorPanel();
+    });
+    item.addEventListener('click', function(e) {
+      if (!e.target.classList.contains('hp-hymn-fav')) hp_openHymn(idx);
+    });
+    frag.appendChild(item);
+  });
+  listEl.appendChild(frag);
 }
 
 function hp_openMenu() {
@@ -5440,6 +5667,11 @@ function hp_esc(s) {
 }
 
 // Cache de resultados filtrados para renderização virtual
+// Favoritos da Harpa — declarado cedo para uso no renderBatch
+var hp_favorites = (function(){
+  try { var s=localStorage.getItem('harpa_favorites_v1'); return s?JSON.parse(s):{}; } catch(e){ return {}; }
+})();
+
 var _hp_filtered = [];
 var _hp_batchSize = 40;
 var _hp_rendered = 0;
@@ -5481,8 +5713,15 @@ function _hp_renderBatch() {
   for (var i = _hp_rendered; i < end; i++) {
     var item = document.createElement('div');
     item.className = 'hp-hymn-item';
-    item.innerHTML = '<div class="hp-hymn-num">'+_hp_filtered[i].h.numero+'</div><div class="hp-hymn-title">'+hp_esc(_hp_filtered[i].h.titulo)+'</div>';
-    (function(idx){ item.addEventListener('click', function(){ hp_openHymn(idx); }); })(_hp_filtered[i].idx);
+    var hnum = _hp_filtered[i].h.numero;
+    var favColor = (hp_favorites && hp_favorites[hnum]) ? hp_favorites[hnum] : '';
+    item.innerHTML =
+      '<div class="hp-hymn-num">'+hnum+'</div>' +
+      '<div class="hp-hymn-title">'+hp_esc(_hp_filtered[i].h.titulo)+'</div>' +
+      (favColor ? '<span style="font-size:18px;padding-right:6px;">❤️</span>' : '');
+    (function(idx){
+      item.addEventListener('click', function(){ hp_openHymn(idx); });
+    })(_hp_filtered[i].idx);
     frag.appendChild(item);
   }
   listEl.appendChild(frag);
@@ -5491,6 +5730,7 @@ function _hp_renderBatch() {
 
 function hp_showList() {
   _hp_backStack = [];
+  hp_renderList('');
   document.getElementById('hp-list-wrap').classList.remove('hidden');
   document.getElementById('hp-detail').classList.remove('active');
   document.getElementById('hp-title').textContent = '🎵 Harpa Cristã';
@@ -5501,12 +5741,14 @@ function hp_showList() {
 }
 
 function hp_buildStanzas(h) {
-  var list=[], hasChorus=h.coro&&h.coro.trim().length>0;
-  for (var i=0;i<h.estrofes.length;i++) {
-    list.push({type:'verse',label:'Estrofe '+(i+1),text:h.estrofes[i]});
-    if (hasChorus) list.push({type:'chorus',label:'Coro',text:h.coro});
+  var estrofes = Array.isArray(h.estrofes) ? h.estrofes : [];
+  var coroText = typeof h.coro === 'string' ? h.coro.trim() : '';
+  var list = [], hasChorus = coroText.length > 0;
+  for (var i = 0; i < estrofes.length; i++) {
+    list.push({type:'verse', label:'Estrofe '+(i+1), text: String(estrofes[i])});
+    if (hasChorus) list.push({type:'chorus', label:'Coro', text: coroText});
   }
-  if (list.length===0&&hasChorus) list.push({type:'chorus',label:'Coro',text:h.coro});
+  if (list.length === 0 && hasChorus) list.push({type:'chorus', label:'Coro', text: coroText});
   return list;
 }
 
@@ -5545,6 +5787,7 @@ function hp_openHymn(index) {
   hp_currentIndex = index;
   hp_renderDetail();
   hp_updatePlayingIndicator();
+  hp_updateFavIcon();
   document.getElementById('hp-list-wrap').classList.add('hidden');
   document.getElementById('hp-detail').classList.add('active');
   document.getElementById('hp-content').scrollTop = 0;
@@ -5737,7 +5980,7 @@ function hp_fmtTime(sec){
 </script>
 
 <script>
-// ── BOTÃO VOLTAR — popstate (corrigido para fechar sem confirm) ──
+// ── BOTÃO VOLTAR — popstate (mesmo padrão do harpa.html original) ──
 window.addEventListener('popstate', function(e) {
   var state = e.state;
 
@@ -5747,6 +5990,7 @@ window.addEventListener('popstate', function(e) {
     if (state && state.harp) {
       _hp_suppressHistory = true;
       if (state.view === 'detail' && typeof state.index === 'number' && HP_DATA[state.index]) {
+        // Restaura hino
         hp_currentIndex = state.index;
         hp_renderDetail();
         hp_updatePlayingIndicator();
@@ -5754,6 +5998,7 @@ window.addEventListener('popstate', function(e) {
         document.getElementById('hp-detail').classList.add('active');
         document.getElementById('hp-content').scrollTop = 0;
       } else {
+        // Volta para lista
         _hp_backStack = [];
         document.getElementById('hp-list-wrap').classList.remove('hidden');
         document.getElementById('hp-detail').classList.remove('active');
@@ -5761,33 +6006,28 @@ window.addEventListener('popstate', function(e) {
         document.getElementById('hp-content').scrollTop = 0;
       }
       _hp_suppressHistory = false;
-      return;
+    } else {
+      // Estado biblia recebido com Harpa aberta = usuário pressionou voltar na lista
+      // Reempurra estado e mostra diálogo
+      history.pushState({ harp: true, view: 'list' }, '', '#harpa');
+      if (typeof hp_confirmLeave === 'function') hp_confirmLeave();
     }
-    // Se sair da Harpa → volta para Bíblia
-    closeHarpa();
     return;
   }
 
-  // Painel aberto da Bíblia → fecha sem perguntar
+  // Painel aberto — fecha
   var openPanel = document.querySelector('.panel-overlay.open');
   if (openPanel && openPanel.id) {
     closePanel(openPanel.id);
+    history.pushState({ biblia: true }, '', '#biblia');
     return;
   }
 
-  // Nada aberto → FECHA O APP DIRETO (sem confirm)
-  // Tenta fechar via Android, Capacitor ou window.close()
-  try {
-    if (typeof window.Android !== 'undefined' && typeof window.Android.exitApp === 'function') {
-      window.Android.exitApp();
-    } else if (typeof Capacitor !== 'undefined' && Capacitor.Plugins && Capacitor.Plugins.App) {
-      Capacitor.Plugins.App.exitApp();
-    } else {
-      window.close();
-    }
-  } catch(e) {
-    // Fallback: tenta fechar
-    window.close();
+  // Confirmação de saída
+  history.pushState({ biblia: true }, '', '#biblia');
+  if (confirm('Deseja sair do aplicativo?')) {
+    history.back();
+    history.back();
   }
 });
 
@@ -5799,6 +6039,103 @@ history.replaceState({ biblia: true }, '', '#biblia');
 </html>
 
 <script>
+// ── FAVORITOS DA HARPA ──────────────────────────
+var HP_FAV_KEY = 'harpa_favorites_v1';
+var HP_COLORS = [
+  { key:'yellow', hex:'#f5d040' }, { key:'red',    hex:'#f06060' },
+  { key:'green',  hex:'#4cc878' }, { key:'blue',   hex:'#6ab0f5' },
+  { key:'orange', hex:'#f5a040' }, { key:'pink',   hex:'#f070a8' },
+  { key:'purple', hex:'#b06cd8' }, { key:'teal',   hex:'#40c8c0' },
+  { key:'brown',  hex:'#c08040' }, { key:'lime',   hex:'#a8d840' },
+  { key:'none',   hex:''        }
+];
+
+function hp_loadFavorites() {
+  try {
+    var s = localStorage.getItem(HP_FAV_KEY);
+    if (s) hp_favorites = JSON.parse(s);
+  } catch(e) { hp_favorites = {}; }
+}
+function hp_saveFavorites() {
+  try { localStorage.setItem(HP_FAV_KEY, JSON.stringify(hp_favorites)); } catch(e) {}
+}
+
+function hp_openColorPanel() {
+  var panel = document.getElementById('hp-color-panel');
+  if (!panel) return;
+
+  // Montar grid de cores
+  var grid = document.getElementById('hp-color-grid');
+  var h = HP_DATA[hp_currentIndex];
+  var curColor = h ? (hp_favorites[h.numero] || '') : '';
+  grid.innerHTML = '';
+  HP_COLORS.forEach(function(c) {
+    var sw = document.createElement('div');
+    sw.className = 'hp-color-swatch' + (curColor === c.hex ? ' active' : '');
+    sw.dataset.hpcolor = c.key;
+    if (c.hex) sw.style.background = c.hex;
+    sw.addEventListener('click', function() {
+      hp_setFavoriteColor(c.hex);
+    });
+    grid.appendChild(sw);
+  });
+
+  panel.classList.add('open');
+}
+
+function hp_closeColorPanel() {
+  var panel = document.getElementById('hp-color-panel');
+  if (panel) panel.classList.remove('open');
+}
+
+function hp_setFavoriteColor(color) {
+  var h = HP_DATA[hp_currentIndex];
+  if (!h) return;
+
+  if (color) {
+    hp_favorites[h.numero] = color;
+  } else {
+    delete hp_favorites[h.numero];
+  }
+  hp_saveFavorites();
+  hp_closeColorPanel();
+
+  // Atualizar coração no detalhe
+  hp_updateFavIcon();
+  // Atualizar coração na lista (re-render parcial)
+  hp_renderList(document.getElementById('hp-search-input') ?
+    document.getElementById('hp-search-input').value : '');
+}
+
+function hp_updateFavIcon() {
+  var h = HP_DATA[hp_currentIndex];
+  var btn = document.getElementById('hp-detail-fav');
+  if (!btn || !h) return;
+  var color = hp_favorites[h.numero] || '';
+  btn.textContent = color ? '❤️' : '🤍';
+  btn.style.color = color || '';
+  btn.style.borderColor = color || 'var(--hp-border)';
+}
+
+function hp_shareHymn() {
+  var h = HP_DATA[hp_currentIndex];
+  if (!h) return;
+  var stanzas = hp_buildStanzas(h);
+  var text = h.numero + ' - ' + h.titulo + '\n\n';
+  stanzas.forEach(function(s) {
+    text += s.label + '\n' + s.text + '\n\n';
+  });
+  text = text.trim() + '\n\n🎵 Harpa Cristã Offline';
+  if (navigator.share) {
+    navigator.share({ text: text }).catch(function(){});
+  } else {
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+}
+
+// Carregar favoritos ao iniciar
+hp_loadFavorites();
+
 // ── PINCH TO ZOOM NA HARPA (mesmo padrão da Bíblia) ──
 (function() {
   var el = document.getElementById('hp-content');
