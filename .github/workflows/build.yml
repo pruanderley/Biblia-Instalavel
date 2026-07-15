@@ -1,0 +1,111 @@
+name: Biblia JFA Offline
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Adicionar plataforma Android
+        run: |
+          rm -rf android
+          npx cap add android
+
+      - name: Injetar TTS nativo no MainActivity
+        run: |
+          mkdir -p android/app/src/main/java/com/biblia/offline
+          cp patches/MainActivity.java \
+             android/app/src/main/java/com/biblia/offline/MainActivity.java
+
+      - name: Copiar ícone para www/ e resources/
+        run: |
+          cp icon-192.png www/icon-192.png
+          mkdir -p resources
+          cp icon.png resources/icon.png
+          npx @capacitor/assets generate --android
+
+      - name: Corrigir tela branca
+        run: |
+          mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/drawable
+          printf '%s' '<?xml version="1.0" encoding="utf-8"?><layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item><color android:color="#0d0a08"/></item></layer-list>' \
+            > android/app/src/main/res/drawable/launch_background.xml
+          printf '%s' '<?xml version="1.0" encoding="utf-8"?><resources><style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#a3312b</item><item name="colorPrimaryDark">#a3312b</item><item name="colorAccent">#C8962D</item></style><style name="AppTheme.NoActionBarLaunch" parent="AppTheme"><item name="android:windowBackground">@drawable/launch_background</item><item name="android:windowNoTitle">true</item><item name="android:windowFullscreen">false</item></style></resources>' \
+            > android/app/src/main/res/values/styles.xml
+
+      - name: Sincronizar arquivos web
+        run: npx cap sync android
+
+      - name: Decodificar Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/biblia-release.p12
+
+      - name: Compilar APK debug, APK Release e AAB Release assinados
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+
+          # APK de testes (debug)
+          ./gradlew assembleDebug --no-daemon
+
+          # APK assinado para distribuição direta
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/biblia-release.p12 \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
+            --no-daemon
+
+          # AAB assinado para a Play Store
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/biblia-release.p12 \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
+            --no-daemon
+
+      - name: Publicar APK Debug para Testes
+        uses: actions/upload-artifact@v4
+        with:
+          name: Biblia-JFA-Offline-APK-Debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Publicar APK Release Assinado
+        uses: actions/upload-artifact@v4
+        with:
+          name: Biblia-JFA-Offline-APK-Release
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+      - name: Publicar AAB para Play Store
+        uses: actions/upload-artifact@v4
+        with:
+          name: Biblia-JFA-Offline-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
