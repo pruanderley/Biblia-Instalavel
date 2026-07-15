@@ -3,6 +3,7 @@ package com.biblia.offline;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.webkit.JavascriptInterface;
@@ -15,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     private TextToSpeech tts;
     private WebView webView;
     private boolean ttsReady = false;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -22,6 +24,9 @@ public class MainActivity extends BridgeActivity {
 
         webView = getBridge().getWebView();
         webView.addJavascriptInterface(new TTSBridge(), "Android");
+
+        // Permite play() sem gesto do usuário — essencial para áudio em segundo plano
+        webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
 
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS) {
@@ -69,10 +74,39 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
-        public void acquireWakeLock() {}
+        public void acquireWakeLock() {
+            runOnUiThread(() -> {
+                try {
+                    if (wakeLock == null) {
+                        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                        // PARTIAL_WAKE_LOCK: mantém CPU ativa sem acender a tela
+                        wakeLock = pm.newWakeLock(
+                            PowerManager.PARTIAL_WAKE_LOCK,
+                            "BibliJFA:AudioWakeLock"
+                        );
+                        wakeLock.setReferenceCounted(false);
+                    }
+                    if (!wakeLock.isHeld()) {
+                        wakeLock.acquire(7200000L); // máximo 2 horas
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
 
         @JavascriptInterface
-        public void releaseWakeLock() {}
+        public void releaseWakeLock() {
+            runOnUiThread(() -> {
+                try {
+                    if (wakeLock != null && wakeLock.isHeld()) {
+                        wakeLock.release();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+        }
 
         @JavascriptInterface
         public void exitApp() {
@@ -98,7 +132,6 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onBackPressed() {
-        // Chama handleBack() no JS — se retornar false, fecha o app
         getBridge().getWebView().evaluateJavascript(
             "(function(){ return typeof window.handleBack==='function' ? window.handleBack() : false; })()",
             value -> {
@@ -116,6 +149,14 @@ public class MainActivity extends BridgeActivity {
         if (tts != null) {
             tts.stop();
             tts.shutdown();
+        }
+        // Libera WakeLock ao fechar o app
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         super.onDestroy();
     }
