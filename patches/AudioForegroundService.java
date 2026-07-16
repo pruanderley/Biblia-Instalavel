@@ -19,10 +19,12 @@ public class AudioForegroundService extends Service {
     private static final String CHANNEL_ID = "BibliJFA_Audio";
     private static final int    NOTIF_ID   = 1001;
 
-    public static final String ACTION_PLAY   = "PLAY";
-    public static final String ACTION_PAUSE  = "PAUSE";
-    public static final String ACTION_RESUME = "RESUME";
-    public static final String ACTION_STOP   = "STOP";
+    public static final String ACTION_PLAY          = "PLAY";
+    public static final String ACTION_PAUSE         = "PAUSE";
+    public static final String ACTION_RESUME        = "RESUME";
+    public static final String ACTION_STOP          = "STOP";
+    public static final String ACTION_START_READING = "START_READING";
+    public static final String ACTION_STOP_READING  = "STOP_READING";
 
     public interface Callback {
         void onAudioEnded();
@@ -79,6 +81,17 @@ public class AudioForegroundService extends Service {
                 break;
             case ACTION_STOP:
                 stopPlayer();
+                stopForeground(true);
+                stopSelf();
+                break;
+            case ACTION_START_READING:
+                currentTitle = intent.getStringExtra("title");
+                currentInfo  = intent.getStringExtra("info");
+                if (currentTitle == null) currentTitle = "Bíblia JFA";
+                if (currentInfo  == null) currentInfo  = "Leitura em voz";
+                showNotification("📖 " + currentTitle, currentInfo);
+                break;
+            case ACTION_STOP_READING:
                 stopForeground(true);
                 stopSelf();
                 break;

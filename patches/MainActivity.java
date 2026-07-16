@@ -161,6 +161,31 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void startReadingForeground(String title, String info) {
+            runOnUiThread(() -> {
+                Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
+                intent.setAction(AudioForegroundService.ACTION_START_READING);
+                intent.putExtra("title", title);
+                intent.putExtra("info", info != null ? info : "Bíblia JFA Offline");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent);
+                } else {
+                    startService(intent);
+                }
+                acquireWakeLockInternal();
+            });
+        }
+
+        @JavascriptInterface
+        public void stopReadingForeground() {
+            runOnUiThread(() -> {
+                Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
+                intent.setAction(AudioForegroundService.ACTION_STOP_READING);
+                startService(intent);
+            });
+        }
+
+        @JavascriptInterface
         public boolean hasNativePlayer() { return true; }
 
         // ── TTS: capítulo inteiro de uma vez ──────────────────
