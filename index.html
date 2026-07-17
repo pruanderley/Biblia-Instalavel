@@ -6002,6 +6002,49 @@ function hp_getPlayer(){ if(!hp_player) hp_player=document.getElementById('hp-au
 
 function hp_toggleAudio(){ var p=hp_getPlayer(); if(p.paused) hp_startAudio(); else hp_pauseAudio(); }
 
+var hp_deepPrefetchRunning = false;
+// Baixa e guarda em cache VÁRIOS hinos à frente (não só o próximo).
+// Evita depender de fetch() ao vivo em segundo plano, que o Android
+// atrasa progressivamente quanto mais tempo o app fica minimizado —
+// por isso o 1º e 2º hino tocavam e o 3º travava.
+async function hp_deepPrefetchAhead(fromIdx, count) {
+  if (hp_deepPrefetchRunning) return;
+  if (typeof caches === 'undefined') return;
+  hp_deepPrefetchRunning = true;
+  try {
+    var targets = [];
+    if (hp_playbackMode === 'sequential') {
+      for (var i = 1; i <= count && (fromIdx + i) < HP_DATA.length; i++) {
+        targets.push(HP_DATA[fromIdx + i]);
+      }
+    } else if (hp_playbackMode === 'random' && HP_DATA.length > 1) {
+      var seen = {};
+      var tries = 0;
+      while (targets.length < count && tries < count * 5) {
+        tries++;
+        var r = Math.floor(Math.random() * HP_DATA.length);
+        if (r === fromIdx || seen[r]) continue;
+        seen[r] = true;
+        targets.push(HP_DATA[r]);
+      }
+    }
+    var cache = await caches.open(hp_AUDIO_CACHE_NAME);
+    for (var j = 0; j < targets.length; j++) {
+      var th = targets[j];
+      try {
+        var url = await hp_urlFor(th.numero);
+        if (!url) continue;
+        var already = await cache.match(url);
+        if (already) continue;
+        var resp = await fetch(url);
+        if (!resp.ok) continue;
+        await cache.put(url, resp.clone());
+      } catch(e) {}
+    }
+  } catch(e) {}
+  hp_deepPrefetchRunning = false;
+}
+
 async function hp_startAudio() {
   var h=HP_DATA[hp_currentIndex]; if(!h) return;
   // WakeLock nativo via Android bridge
@@ -6018,7 +6061,7 @@ async function hp_startAudio() {
   } catch(e) {}
   var p=hp_getPlayer();
   if(p.dataset.hymnNumero===String(h.numero)&&p.src){
-    try{await p.play();hp_setUI(true,'Tocando...');hp_prefetchNext();}catch(e){} return;
+    try{await p.play();hp_setUI(true,'Tocando...');hp_prefetchNext();hp_deepPrefetchAhead(hp_currentIndex,6);}catch(e){} return;
   }
   if(hp_isAudioLoading) return;
   hp_isAudioLoading=true; hp_setProgress('🔎 Localizando...');
@@ -6046,6 +6089,7 @@ async function hp_startAudio() {
     await p.play(); hp_setUI(true,'Tocando: '+h.titulo);
     hp_setupMediaSession();
     hp_prefetchNext();
+    hp_deepPrefetchAhead(hp_currentIndex, 6);
   }catch(e){hp_setProgress('❌ '+e.message);hp_setUI(false,null);}
   finally{hp_isAudioLoading=false;}
 }
@@ -6141,6 +6185,7 @@ async function hp_playNextFromPrefetch(nextIdx) {
       hp_setUI(true,'Tocando: '+h.titulo);
       hp_setupMediaSession();
       hp_prefetchNext();
+      hp_deepPrefetchAhead(hp_currentIndex, 6);
       return;
     } catch(e) { /* cai no fallback abaixo */ }
   }
