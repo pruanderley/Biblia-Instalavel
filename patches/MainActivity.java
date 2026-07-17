@@ -1,4 +1,4 @@
-package com.biblia.offline;
+package biblia.harpa.offline;
 
 import android.content.ComponentName;
 import android.content.Context;
@@ -24,7 +24,6 @@ public class MainActivity extends BridgeActivity {
     private boolean ttsReady = false;
     private PowerManager.WakeLock wakeLock;
 
-    // ── Foreground Service ────────────────────────────────────
     private AudioForegroundService audioService;
     private boolean serviceBound = false;
 
@@ -49,7 +48,7 @@ public class MainActivity extends BridgeActivity {
         webView.addJavascriptInterface(new TTSBridge(), "Android");
         webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
 
-        // Registra callback do serviço → chama JS quando hino termina
+        // Callback do AudioForegroundService → JS
         AudioForegroundService.callback = new AudioForegroundService.Callback() {
             @Override
             public void onAudioEnded() {
@@ -63,12 +62,11 @@ public class MainActivity extends BridgeActivity {
             }
         };
 
-        // ── TTS ────────────────────────────────────────────────
+        // TTS
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS) {
                 int r = tts.setLanguage(new Locale("pt", "BR"));
-                if (r == TextToSpeech.LANG_MISSING_DATA ||
-                    r == TextToSpeech.LANG_NOT_SUPPORTED)
+                if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED)
                     tts.setLanguage(Locale.getDefault());
 
                 tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
@@ -77,19 +75,16 @@ public class MainActivity extends BridgeActivity {
                     public void onDone(String uid) {
                         if ("BATCH_DONE".equals(uid)) {
                             runOnUiThread(() -> webView.evaluateJavascript(
-                                "if(typeof window.onTTSChapterDone==='function')" +
-                                "window.onTTSChapterDone();", null));
+                                "if(typeof window.onTTSChapterDone==='function') window.onTTSChapterDone();", null));
                         } else {
                             runOnUiThread(() -> webView.evaluateJavascript(
-                                "if(typeof window.onTTSVerseFinished==='function')" +
-                                "window.onTTSVerseFinished();", null));
+                                "if(typeof window.onTTSVerseFinished==='function') window.onTTSVerseFinished();", null));
                         }
                     }
                     @Override
                     public void onError(String uid) {
                         runOnUiThread(() -> webView.evaluateJavascript(
-                            "if(typeof window.onTTSVerseFinished==='function')" +
-                            "window.onTTSVerseFinished();", null));
+                            "if(typeof window.onTTSVerseFinished==='function') window.onTTSVerseFinished();", null));
                     }
                 });
                 ttsReady = true;
@@ -100,7 +95,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onStart() {
         super.onStart();
-        // Vincula ao serviço de áudio
         Intent intent = new Intent(this, AudioForegroundService.class);
         bindService(intent, serviceConn, Context.BIND_AUTO_CREATE);
     }
@@ -111,24 +105,53 @@ public class MainActivity extends BridgeActivity {
         if (serviceBound) { unbindService(serviceConn); serviceBound = false; }
     }
 
-    // ── Bridge JavaScript ─────────────────────────────────────
     public class TTSBridge {
 
-        // ── Harpa: play via Foreground Service ────────────────
+        // ── Harpa: player nativo via ForegroundService ────────
         @JavascriptInterface
         public void playHarpaUrl(String url, String title, String info) {
             runOnUiThread(() -> {
                 Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
                 intent.setAction(AudioForegroundService.ACTION_PLAY);
                 intent.putExtra("url",   url);
-                intent.putExtra("title", title);
-                intent.putExtra("info",  info != null ? info : "");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent.putExtra("title", title != null ? title : "Harpa Cristã");
+                intent.putExtra("info",  info  != null ? info  : "Bíblia Harpa Offline");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                     startForegroundService(intent);
-                } else {
+                else
                     startService(intent);
-                }
                 acquireWakeLockInternal();
+            });
+        }
+
+        // Recebe os bytes do MP3 (já baixado/cacheado pelo JS) em base64,
+        // grava em arquivo local e manda o serviço nativo tocar — assim o
+        // áudio roda no MediaPlayer do Android, não no WebView, e sobrevive
+        // a tela apagada / app minimizado.
+        @JavascriptInterface
+        public void playHarpaBytes(String base64, String title, String info) {
+            runOnUiThread(() -> {
+                try {
+                    byte[] data = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+                    java.io.File f = new java.io.File(getCacheDir(), "harpa_current.mp3");
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                        fos.write(data);
+                    }
+                    Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
+                    intent.setAction(AudioForegroundService.ACTION_PLAY);
+                    intent.putExtra("url", f.getAbsolutePath());
+                    intent.putExtra("title", title != null ? title : "Harpa Cristã");
+                    intent.putExtra("info",  info  != null ? info  : "Bíblia Harpa Offline");
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        startForegroundService(intent);
+                    else
+                        startService(intent);
+                    acquireWakeLockInternal();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(typeof window.onHarpaError==='function') window.onHarpaError();", null));
+                }
             });
         }
 
@@ -161,17 +184,20 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public boolean hasNativePlayer() { return true; }
+
+        // ── Bíblia: notificação durante leitura ───────────────
+        @JavascriptInterface
         public void startReadingForeground(String title, String info) {
             runOnUiThread(() -> {
                 Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
                 intent.setAction(AudioForegroundService.ACTION_START_READING);
-                intent.putExtra("title", title);
-                intent.putExtra("info", info != null ? info : "Bíblia JFA Offline");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent.putExtra("title", title != null ? title : "Bíblia Harpa Offline");
+                intent.putExtra("info",  info  != null ? info  : "Leitura em voz");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                     startForegroundService(intent);
-                } else {
+                else
                     startService(intent);
-                }
                 acquireWakeLockInternal();
             });
         }
@@ -179,14 +205,11 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void stopReadingForeground() {
             runOnUiThread(() -> {
-                Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
-                intent.setAction(AudioForegroundService.ACTION_STOP_READING);
-                startService(intent);
+                Intent i = new Intent(MainActivity.this, AudioForegroundService.class);
+                i.setAction(AudioForegroundService.ACTION_STOP_READING);
+                startService(i);
             });
         }
-
-        @JavascriptInterface
-        public boolean hasNativePlayer() { return true; }
 
         // ── TTS: capítulo inteiro de uma vez ──────────────────
         @JavascriptInterface
@@ -201,8 +224,7 @@ public class MainActivity extends BridgeActivity {
                     JSONArray verses = new JSONArray(versesJson);
                     for (int i = 0; i < verses.length(); i++) {
                         String uid = (i == verses.length() - 1) ? "BATCH_DONE" : "v" + i;
-                        Bundle params = new Bundle();
-                        tts.speak(verses.getString(i), TextToSpeech.QUEUE_ADD, params, uid);
+                        tts.speak(verses.getString(i), TextToSpeech.QUEUE_ADD, new Bundle(), uid);
                     }
                 } catch (Exception e) { e.printStackTrace(); }
             });
@@ -248,13 +270,11 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    // ── Helpers internos ──────────────────────────────────────
     private void acquireWakeLockInternal() {
         try {
             if (wakeLock == null) {
                 PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                wakeLock = pm.newWakeLock(
-                    PowerManager.PARTIAL_WAKE_LOCK, "BibliJFA:WakeLock");
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BibliaHarpa:WakeLock");
                 wakeLock.setReferenceCounted(false);
             }
             if (!wakeLock.isHeld()) wakeLock.acquire(7200000L);
@@ -269,8 +289,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onBackPressed() {
         getBridge().getWebView().evaluateJavascript(
-            "(function(){return typeof window.handleBack==='function'" +
-            "?window.handleBack():false;})()",
+            "(function(){return typeof window.handleBack==='function'?window.handleBack():false;})()",
             value -> {
                 if ("false".equals(value))
                     runOnUiThread(() -> { finishAffinity(); System.exit(0); });

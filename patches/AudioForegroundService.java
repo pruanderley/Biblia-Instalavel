@@ -1,4 +1,4 @@
-package com.biblia.offline;
+package biblia.harpa.offline;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -16,7 +16,7 @@ import androidx.core.app.NotificationCompat;
 
 public class AudioForegroundService extends Service {
 
-    private static final String CHANNEL_ID = "BibliJFA_Audio";
+    private static final String CHANNEL_ID = "BibliaHarpa_Audio";
     private static final int    NOTIF_ID   = 1001;
 
     public static final String ACTION_PLAY          = "PLAY";
@@ -33,7 +33,7 @@ public class AudioForegroundService extends Service {
     public static Callback callback = null;
 
     private MediaPlayer mediaPlayer;
-    private String currentTitle = "Harpa Cristã";
+    private String currentTitle = "Bíblia Harpa Offline";
     private String currentInfo  = "";
 
     private final IBinder binder = new LocalBinder();
@@ -41,8 +41,7 @@ public class AudioForegroundService extends Service {
         public AudioForegroundService get() { return AudioForegroundService.this; }
     }
 
-    @Override
-    public IBinder onBind(Intent intent) { return binder; }
+    @Override public IBinder onBind(Intent intent) { return binder; }
 
     @Override
     public void onCreate() {
@@ -53,7 +52,6 @@ public class AudioForegroundService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) {
-            // Serviço reiniciado pelo sistema — manter foreground
             showNotification("⏸ " + currentTitle, currentInfo);
             return START_STICKY;
         }
@@ -66,7 +64,6 @@ public class AudioForegroundService extends Service {
                 currentInfo  = intent.getStringExtra("info");
                 if (currentTitle == null) currentTitle = "Harpa Cristã";
                 if (currentInfo  == null) currentInfo  = "";
-                // ← OBRIGATÓRIO: startForeground ANTES de qualquer async
                 showNotification("⏳ " + currentTitle, currentInfo);
                 String url = intent.getStringExtra("url");
                 if (url != null) playUrl(url);
@@ -87,7 +84,7 @@ public class AudioForegroundService extends Service {
             case ACTION_START_READING:
                 currentTitle = intent.getStringExtra("title");
                 currentInfo  = intent.getStringExtra("info");
-                if (currentTitle == null) currentTitle = "Bíblia JFA";
+                if (currentTitle == null) currentTitle = "Bíblia Harpa Offline";
                 if (currentInfo  == null) currentInfo  = "Leitura em voz";
                 showNotification("📖 " + currentTitle, currentInfo);
                 break;
@@ -102,7 +99,6 @@ public class AudioForegroundService extends Service {
     private void playUrl(String url) {
         try {
             if (mediaPlayer != null) { mediaPlayer.release(); mediaPlayer = null; }
-
             mediaPlayer = new MediaPlayer();
             mediaPlayer.setAudioAttributes(
                 new AudioAttributes.Builder()
@@ -111,10 +107,8 @@ public class AudioForegroundService extends Service {
                     .build());
             mediaPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
             mediaPlayer.setDataSource(url);
-
             mediaPlayer.setOnPreparedListener(mp -> {
                 mp.start();
-                // Atualiza notificação — agora tocando de verdade
                 showNotification("▶ " + currentTitle, currentInfo);
             });
             mediaPlayer.setOnCompletionListener(mp -> {
@@ -126,7 +120,6 @@ public class AudioForegroundService extends Service {
                 return true;
             });
             mediaPlayer.prepareAsync();
-
         } catch (Exception e) {
             e.printStackTrace();
             if (callback != null) callback.onAudioError();
@@ -145,11 +138,7 @@ public class AudioForegroundService extends Service {
 
     private void stopPlayer() {
         try {
-            if (mediaPlayer != null) {
-                mediaPlayer.stop();
-                mediaPlayer.release();
-                mediaPlayer = null;
-            }
+            if (mediaPlayer != null) { mediaPlayer.stop(); mediaPlayer.release(); mediaPlayer = null; }
         } catch (Exception e) {}
     }
 
@@ -164,18 +153,18 @@ public class AudioForegroundService extends Service {
         int piFlags = Build.VERSION.SDK_INT >= 23
             ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
             : PendingIntent.FLAG_UPDATE_CURRENT;
-        PendingIntent tapPi = PendingIntent.getActivity(this, 0, tapIntent, piFlags);
+        PendingIntent tapPi    = PendingIntent.getActivity(this, 0, tapIntent, piFlags);
 
         Intent pauseIntent = new Intent(this, AudioForegroundService.class);
         pauseIntent.setAction(isPlaying() ? ACTION_PAUSE : ACTION_RESUME);
-        PendingIntent pausePi = PendingIntent.getService(this, 1, pauseIntent, piFlags);
+        PendingIntent pausePi  = PendingIntent.getService(this, 1, pauseIntent, piFlags);
 
         Intent stopIntent = new Intent(this, AudioForegroundService.class);
         stopIntent.setAction(ACTION_STOP);
-        PendingIntent stopPi = PendingIntent.getService(this, 2, stopIntent, piFlags);
+        PendingIntent stopPi   = PendingIntent.getService(this, 2, stopIntent, piFlags);
 
         Notification notif = new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(title != null ? title : "Bíblia JFA")
+            .setContentTitle(title != null ? title : "Bíblia Harpa Offline")
             .setContentText(text  != null ? text  : "")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(tapPi)
@@ -194,7 +183,7 @@ public class AudioForegroundService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
                 CHANNEL_ID, "Reprodução de Áudio", NotificationManager.IMPORTANCE_LOW);
-            ch.setDescription("Bíblia JFA e Harpa Cristã");
+            ch.setDescription("Bíblia Harpa Offline");
             ch.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(ch);
@@ -202,8 +191,5 @@ public class AudioForegroundService extends Service {
     }
 
     @Override
-    public void onDestroy() {
-        stopPlayer();
-        super.onDestroy();
-    }
+    public void onDestroy() { stopPlayer(); super.onDestroy(); }
 }
