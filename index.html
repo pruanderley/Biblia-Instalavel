@@ -3405,6 +3405,17 @@ function _hasAndroidBridge() {
 function _hasWebSpeech() {
   return typeof window.speechSynthesis !== 'undefined';
 }
+// Pede uma única vez para o Android ignorar a otimização de bateria do app
+// (ajuda o MIUI/Xiaomi a não matar o serviço de leitura em segundo plano).
+// Não interfere na Harpa, que não depende do player nativo.
+try {
+  if (_hasAndroidBridge() &&
+      !localStorage.getItem('bh_battery_opt_asked') &&
+      typeof window.Android.requestIgnoreBatteryOptimizations === 'function') {
+    localStorage.setItem('bh_battery_opt_asked', '1');
+    window.Android.requestIgnoreBatteryOptimizations();
+  }
+} catch(e) {}
 function _isAndroidWebView() {
   const ua = navigator.userAgent || '';
   return /Android/.test(ua);
@@ -5514,24 +5525,6 @@ var hp_currentIndex = -1;
 var hp_playbackMode = 'sequential';
 var hp_isAudioLoading = false;
 var hp_currentObjectUrl = null;
-var hp_nativePlaying = false;
-var hp_nativeHymnNumero = null;
-function hp_hasNative(){
-  try { return typeof window.Android !== 'undefined' && typeof window.Android.hasNativePlayer === 'function' && window.Android.hasNativePlayer(); }
-  catch(e){ return false; }
-}
-function hp_blobToBase64(blob){
-  return new Promise(function(resolve,reject){
-    var reader = new FileReader();
-    reader.onloadend = function(){
-      var result = reader.result;
-      var idx = result.indexOf(',');
-      resolve(idx>=0 ? result.slice(idx+1) : result);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
 var hp_GITHUB_OWNER = 'pruanderley';
 var hp_GITHUB_REPO  = 'harpa-audio';
 var hp_GITHUB_API   = 'https://api.github.com/repos/' + hp_GITHUB_OWNER + '/' + hp_GITHUB_REPO + '/contents/';
@@ -6007,10 +6000,7 @@ async function hp_urlFor(numero) {
 var hp_player = null;
 function hp_getPlayer(){ if(!hp_player) hp_player=document.getElementById('hp-audio-player'); return hp_player; }
 
-function hp_toggleAudio(){
-  if (hp_hasNative()) { if (hp_nativePlaying) hp_pauseAudio(); else hp_startAudio(); return; }
-  var p=hp_getPlayer(); if(p.paused) hp_startAudio(); else hp_pauseAudio();
-}
+function hp_toggleAudio(){ var p=hp_getPlayer(); if(p.paused) hp_startAudio(); else hp_pauseAudio(); }
 
 async function hp_startAudio() {
   var h=HP_DATA[hp_currentIndex]; if(!h) return;
@@ -6026,18 +6016,8 @@ async function hp_startAudio() {
       hp_wakeLock = await navigator.wakeLock.request('screen');
     }
   } catch(e) {}
-
-  var useNative = hp_hasNative();
-  var p = hp_getPlayer();
-
-  // Retoma reprodução nativa já carregada com este hino (ex.: veio de uma pausa)
-  if (useNative && hp_nativeHymnNumero === h.numero && !hp_nativePlaying) {
-    try { window.Android.resumeHarpa(); } catch(e) {}
-    hp_nativePlaying = true; hp_setUI(true,'Tocando...'); hp_prefetchNext();
-    return;
-  }
-  // Retoma reprodução web (fallback, sem ponte nativa) já carregada
-  if(!useNative && p.dataset.hymnNumero===String(h.numero)&&p.src){
+  var p=hp_getPlayer();
+  if(p.dataset.hymnNumero===String(h.numero)&&p.src){
     try{await p.play();hp_setUI(true,'Tocando...');hp_prefetchNext();}catch(e){} return;
   }
   if(hp_isAudioLoading) return;
@@ -6060,17 +6040,10 @@ async function hp_startAudio() {
       if(typeof caches!=='undefined'){var c2=await caches.open(hp_AUDIO_CACHE_NAME);await c2.put(url,resp.clone());}
       blob=await resp.blob();
     }
-    if (useNative) {
-      var b64 = await hp_blobToBase64(blob);
-      window.Android.playHarpaBytes(b64, h.titulo, 'Hino '+h.numero);
-      hp_nativeHymnNumero = h.numero; hp_nativePlaying = true;
-    } else {
-      if(hp_currentObjectUrl){URL.revokeObjectURL(hp_currentObjectUrl);hp_currentObjectUrl=null;}
-      hp_currentObjectUrl=URL.createObjectURL(blob);
-      p.src=hp_currentObjectUrl; p.dataset.hymnNumero=String(h.numero);
-      await p.play();
-    }
-    hp_setUI(true,'Tocando: '+h.titulo);
+    if(hp_currentObjectUrl){URL.revokeObjectURL(hp_currentObjectUrl);hp_currentObjectUrl=null;}
+    hp_currentObjectUrl=URL.createObjectURL(blob);
+    p.src=hp_currentObjectUrl; p.dataset.hymnNumero=String(h.numero);
+    await p.play(); hp_setUI(true,'Tocando: '+h.titulo);
     hp_setupMediaSession();
     hp_prefetchNext();
   }catch(e){hp_setProgress('❌ '+e.message);hp_setUI(false,null);}
@@ -6156,22 +6129,15 @@ async function hp_playNextFromPrefetch(nextIdx) {
   hp_renderDetail();
   var h = HP_DATA[hp_currentIndex];
   if(!h) return;
-  var useNative = hp_hasNative();
   var p = hp_getPlayer();
   if(hp_prefetchBlob && hp_prefetchNumero===h.numero){
     var blob = hp_prefetchBlob;
     hp_prefetchBlob = null; hp_prefetchNumero = null; hp_prefetchIndex = -1;
     try {
-      if (useNative) {
-        var b64 = await hp_blobToBase64(blob);
-        window.Android.playHarpaBytes(b64, h.titulo, 'Hino '+h.numero);
-        hp_nativeHymnNumero = h.numero; hp_nativePlaying = true;
-      } else {
-        if(hp_currentObjectUrl){URL.revokeObjectURL(hp_currentObjectUrl);hp_currentObjectUrl=null;}
-        hp_currentObjectUrl = URL.createObjectURL(blob);
-        p.src = hp_currentObjectUrl; p.dataset.hymnNumero = String(h.numero);
-        await p.play();
-      }
+      if(hp_currentObjectUrl){URL.revokeObjectURL(hp_currentObjectUrl);hp_currentObjectUrl=null;}
+      hp_currentObjectUrl = URL.createObjectURL(blob);
+      p.src = hp_currentObjectUrl; p.dataset.hymnNumero = String(h.numero);
+      await p.play();
       hp_setUI(true,'Tocando: '+h.titulo);
       hp_setupMediaSession();
       hp_prefetchNext();
@@ -6182,13 +6148,7 @@ async function hp_playNextFromPrefetch(nextIdx) {
   hp_startAudio();
 }
 function hp_pauseAudio(){
-  if (hp_hasNative()) {
-    try { window.Android.pauseHarpa(); } catch(e) {}
-    hp_nativePlaying = false;
-  } else {
-    var p=hp_getPlayer(); p.pause();
-  }
-  hp_setUI(false,'Pausado');
+  var p=hp_getPlayer(); p.pause(); hp_setUI(false,'Pausado');
   if('mediaSession' in navigator) navigator.mediaSession.playbackState='paused';
   try { if (hp_wakeLock) { hp_wakeLock.release(); hp_wakeLock = null; } } catch(e) {}
   try {
@@ -6212,7 +6172,7 @@ function hp_setProgress(msg){
   hp_syncEq();
 }
 function hp_syncEq(){
-  var playing = hp_hasNative() ? hp_nativePlaying : !hp_getPlayer().paused;
+  var p=hp_getPlayer(), playing=!p.paused;
   var btn=document.getElementById('hp-audio-btn');
   if(btn){
     btn.textContent=playing?'⏸':'🎵';
@@ -6226,15 +6186,9 @@ function hp_syncEq(){
 }
 // Atualiza indicador só no hino que está tocando
 function hp_updatePlayingIndicator() {
-  var playing, playingNum;
-  if (hp_hasNative()) {
-    playing = hp_nativePlaying;
-    playingNum = hp_nativeHymnNumero;
-  } else {
-    var p = hp_getPlayer();
-    playing = p && !p.paused && p.src;
-    playingNum = p ? p.dataset.hymnNumero : null;
-  }
+  var p = hp_getPlayer();
+  var playing = p && !p.paused && p.src;
+  var playingNum = p ? p.dataset.hymnNumero : null;
   var curH = HP_DATA[hp_currentIndex];
   var isCurrentPlaying = playing && curH && String(curH.numero) === String(playingNum);
   var indicator = document.getElementById('hp-playing-indicator');
@@ -6291,30 +6245,6 @@ function hp_fmtTime(sec){
     if(!hp_isAudioLoading) hp_setProgress('❌ Erro ao tocar o áudio.');
     hp_setUI(false,null);
   });
-
-  // Chamado pelo AudioForegroundService (Android) quando o hino termina em segundo plano
-  window.onHarpaEnded = function(){
-    hp_nativePlaying = false;
-    hp_setUI(false,null);
-    if(hp_playbackMode==='repeat'){
-      hp_nativeHymnNumero = null; // força recarregar/reenviar o mesmo hino ao player nativo
-      hp_startAudio();
-      return;
-    }
-    if(hp_playbackMode==='sequential'&&hp_currentIndex<HP_DATA.length-1){
-      hp_playNextFromPrefetch(hp_currentIndex+1);
-    } else if(hp_playbackMode==='random'&&HP_DATA.length>1){
-      var r=hp_currentIndex;
-      while(r===hp_currentIndex)r=Math.floor(Math.random()*HP_DATA.length);
-      hp_playNextFromPrefetch(r);
-    }
-  };
-  // Chamado pelo AudioForegroundService (Android) em caso de erro de reprodução
-  window.onHarpaError = function(){
-    hp_nativePlaying = false;
-    hp_setProgress('❌ Erro ao tocar o áudio.');
-    hp_setUI(false,null);
-  };
 })();
 </script>
 
