@@ -1,0 +1,124 @@
+name: Biblia Harpa Offline
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Preparar pasta www
+        run: |
+          mkdir -p www
+          if [ -f "index.html" ]; then
+            cp index.html www/index.html
+            echo "index.html copiado para www/"
+          elif [ -f "www/index.html" ]; then
+            echo "www/index.html já existe"
+          else
+            echo "ERRO: index.html não encontrado"
+            exit 1
+          fi
+
+      - name: Adicionar plataforma Android
+        run: |
+          rm -rf android
+          npx cap add android
+
+      - name: Injetar arquivos nativos
+        run: |
+          mkdir -p android/app/src/main/java/biblia/harpa/offline
+          cp patches/MainActivity.java \
+             android/app/src/main/java/biblia/harpa/offline/MainActivity.java
+          cp patches/AudioForegroundService.java \
+             android/app/src/main/java/biblia/harpa/offline/AudioForegroundService.java
+
+      - name: Patch AndroidManifest
+        run: python3 patches/patch_manifest.py
+
+      - name: Copiar ícones
+        run: |
+          cp icon-192.png www/icon-192.png 2>/dev/null || true
+          cp icon-512.png www/icon-512.png 2>/dev/null || true
+          mkdir -p resources
+          cp icon.png resources/icon.png 2>/dev/null || true
+          npx @capacitor/assets generate --android 2>/dev/null || true
+
+      - name: Corrigir tela branca
+        run: |
+          mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/drawable
+          printf '%s' '<?xml version="1.0" encoding="utf-8"?><layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item><color android:color="#0d0a08"/></item></layer-list>' \
+            > android/app/src/main/res/drawable/launch_background.xml
+          printf '%s' '<?xml version="1.0" encoding="utf-8"?><resources><style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar"><item name="colorPrimary">#8B4513</item><item name="colorPrimaryDark">#8B4513</item><item name="colorAccent">#C8962D</item></style><style name="AppTheme.NoActionBarLaunch" parent="AppTheme"><item name="android:windowBackground">@drawable/launch_background</item><item name="android:windowNoTitle">true</item><item name="android:windowFullscreen">false</item></style></resources>' \
+            > android/app/src/main/res/values/styles.xml
+
+      - name: Sincronizar arquivos web
+        run: npx cap sync android
+
+      - name: Decodificar Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/release.p12
+
+      - name: Compilar APK debug, APK Release e AAB
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/release.p12 \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
+            --no-daemon
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/release.p12 \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
+            --no-daemon
+
+      - name: Publicar APK Debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: BibliaHarpa-APK-Debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Publicar APK Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: BibliaHarpa-APK-Release
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+      - name: Publicar AAB Play Store
+        uses: actions/upload-artifact@v4
+        with:
+          name: BibliaHarpa-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30

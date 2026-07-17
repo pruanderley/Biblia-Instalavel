@@ -1,10 +1,15 @@
 {
-  "appId": "com.biblia.offline",
-  "appName": "Bíblia JFA Offline",
+  "appId": "biblia.harpa.offline",
+  "appName": "Biblia Harpa Offline",
   "webDir": "www",
   "android": {
-    "allowMixedContent": false,
-    "minWebViewVersion": 60,
-    "backgroundColor": "#0d0a08"
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
   }
 }
