@@ -124,37 +124,6 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
-        // Recebe os bytes do MP3 (já baixado/cacheado pelo JS) em base64,
-        // grava em arquivo local e manda o serviço nativo tocar — assim o
-        // áudio roda no MediaPlayer do Android, não no WebView, e sobrevive
-        // a tela apagada / app minimizado.
-        @JavascriptInterface
-        public void playHarpaBytes(String base64, String title, String info) {
-            runOnUiThread(() -> {
-                try {
-                    byte[] data = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
-                    java.io.File f = new java.io.File(getCacheDir(), "harpa_current.mp3");
-                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
-                        fos.write(data);
-                    }
-                    Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
-                    intent.setAction(AudioForegroundService.ACTION_PLAY);
-                    intent.putExtra("url", f.getAbsolutePath());
-                    intent.putExtra("title", title != null ? title : "Harpa Cristã");
-                    intent.putExtra("info",  info  != null ? info  : "Bíblia Harpa Offline");
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        startForegroundService(intent);
-                    else
-                        startService(intent);
-                    acquireWakeLockInternal();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    runOnUiThread(() -> webView.evaluateJavascript(
-                        "if(typeof window.onHarpaError==='function') window.onHarpaError();", null));
-                }
-            });
-        }
-
         @JavascriptInterface
         public void pauseHarpa() {
             runOnUiThread(() -> {
