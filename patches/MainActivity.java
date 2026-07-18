@@ -124,6 +124,59 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        // Recebe os bytes do MP3 (já baixado/cacheado pelo JS) em base64,
+        // grava em arquivo local e manda o serviço nativo tocar — assim o
+        // áudio roda no MediaPlayer do Android, não no WebView, e sobrevive
+        // a tela apagada / app minimizado.
+        @JavascriptInterface
+        public void playHarpaBytes(String base64, String title, String info) {
+            runOnUiThread(() -> {
+                try {
+                    byte[] data = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+                    java.io.File f = new java.io.File(getCacheDir(), "harpa_current.mp3");
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                        fos.write(data);
+                    }
+                    Intent intent = new Intent(MainActivity.this, AudioForegroundService.class);
+                    intent.setAction(AudioForegroundService.ACTION_PLAY);
+                    intent.putExtra("url", f.getAbsolutePath());
+                    intent.putExtra("title", title != null ? title : "Harpa Cristã");
+                    intent.putExtra("info",  info  != null ? info  : "Bíblia Harpa Offline");
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        startForegroundService(intent);
+                    else
+                        startService(intent);
+                    acquireWakeLockInternal();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    runOnUiThread(() -> webView.evaluateJavascript(
+                        "if(typeof window.onHarpaError==='function') window.onHarpaError();", null));
+                }
+            });
+        }
+
+        // Pede para o Android ignorar a otimização de bateria para o app.
+        // No MIUI/Xiaomi isso não substitui as configs próprias da MIUI
+        // (Autostart, "Sem restrições", travar nos recentes), mas ajuda e
+        // é a via oficial do Android — sem ela o MIUI mata o serviço mais fácil.
+        @JavascriptInterface
+        public void requestIgnoreBatteryOptimizations() {
+            runOnUiThread(() -> {
+                try {
+                    android.os.PowerManager pm =
+                        (android.os.PowerManager) getSystemService(POWER_SERVICE);
+                    String pkg = getPackageName();
+                    if (pm != null && !pm.isIgnoringBatteryOptimizations(pkg)) {
+                        Intent intent = new Intent(
+                            android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                        intent.setData(Uri.parse("package:" + pkg));
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                    }
+                } catch (Exception e) { e.printStackTrace(); }
+            });
+        }
+
         @JavascriptInterface
         public void pauseHarpa() {
             runOnUiThread(() -> {
