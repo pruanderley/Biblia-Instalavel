@@ -6005,8 +6005,10 @@ function hp_toggleAudio(){ var p=hp_getPlayer(); if(p.paused) hp_startAudio(); e
 var hp_deepPrefetchRunning = false;
 // Baixa e guarda em cache VÁRIOS hinos à frente (não só o próximo).
 // Evita depender de fetch() ao vivo em segundo plano, que o Android
-// atrasa progressivamente quanto mais tempo o app fica minimizado —
-// por isso o 1º e 2º hino tocavam e o 3º travava.
+// (principalmente no MIUI) corta ou derruba de vez depois de alguns
+// minutos com a tela apagada — por isso os primeiros hinos tocavam e,
+// depois de um tempo, parava de vez: o buffer acabava e a rede já não
+// respondia mais para o app em segundo plano.
 async function hp_deepPrefetchAhead(fromIdx, count) {
   if (hp_deepPrefetchRunning) return;
   if (typeof caches === 'undefined') return;
@@ -6061,7 +6063,7 @@ async function hp_startAudio() {
   } catch(e) {}
   var p=hp_getPlayer();
   if(p.dataset.hymnNumero===String(h.numero)&&p.src){
-    try{await p.play();hp_setUI(true,'Tocando...');hp_prefetchNext();hp_deepPrefetchAhead(hp_currentIndex,6);}catch(e){} return;
+    try{await p.play();hp_setUI(true,'Tocando...');hp_prefetchNext();hp_deepPrefetchAhead(hp_currentIndex,16);}catch(e){} return;
   }
   if(hp_isAudioLoading) return;
   hp_isAudioLoading=true; hp_setProgress('🔎 Localizando...');
@@ -6089,7 +6091,7 @@ async function hp_startAudio() {
     await p.play(); hp_setUI(true,'Tocando: '+h.titulo);
     hp_setupMediaSession();
     hp_prefetchNext();
-    hp_deepPrefetchAhead(hp_currentIndex, 6);
+    hp_deepPrefetchAhead(hp_currentIndex, 16);
   }catch(e){hp_setProgress('❌ '+e.message);hp_setUI(false,null);}
   finally{hp_isAudioLoading=false;}
 }
@@ -6185,7 +6187,7 @@ async function hp_playNextFromPrefetch(nextIdx) {
       hp_setUI(true,'Tocando: '+h.titulo);
       hp_setupMediaSession();
       hp_prefetchNext();
-      hp_deepPrefetchAhead(hp_currentIndex, 6);
+      hp_deepPrefetchAhead(hp_currentIndex, 16);
       return;
     } catch(e) { /* cai no fallback abaixo */ }
   }
