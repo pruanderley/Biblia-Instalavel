@@ -1367,17 +1367,25 @@
   }
 
   #note-panel .panel { padding-bottom: 20px; }
+  #note-panel .panel {
+    height: 85vh;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+  }
   #note-textarea {
     width: 100%;
-    min-height: 120px;
+    flex: 1;
+    min-height: 0;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text-primary);
     font-family: var(--verse-font);
-    font-size: 16px;
-    padding: 12px;
-    resize: vertical;
+    font-size: 17px;
+    line-height: 1.7;
+    padding: 16px;
+    resize: none;
     margin-top: 10px;
     outline: none;
     transition: border-color 0.2s ease;
@@ -2562,6 +2570,15 @@
 let bibleData = [];
 let currentBook = 0;
 let currentChapter = 0;
+var _suppressChapterHistory = false;
+// Empilha o capítulo atual no histórico do navegador/Android, para que o
+// botão Voltar desfaça a navegação por gesto/seta/botão em vez de sair do app.
+function _pushChapterHistory() {
+  if (_suppressChapterHistory) return;
+  var st = history.state;
+  if (st && st.chapNav && st.book === currentBook && st.chapter === currentChapter) return;
+  history.pushState({ biblia: true, chapNav: true, book: currentBook, chapter: currentChapter }, '', '#biblia');
+}
 let selectedVerses = [];
 let lastSelectedVerse = null;
 let highlights = {};
@@ -2806,28 +2823,36 @@ function vmSearch() {
 }
 
 function prevChapter() {
+  var changed = false;
   if (currentChapter > 0) {
-    currentChapter--;
+    currentChapter--; changed = true;
   } else if (currentBook > 0) {
     currentBook--;
     document.getElementById('book-select').value = currentBook;
     currentChapter = bibleData[currentBook].chapters.length - 1;
+    changed = true;
   }
+  if (!changed) return;
   selectedVerses.length = 0; lastSelectedVerse = null;
   renderChapter();
+  _pushChapterHistory();
 }
 
 function nextChapter() {
   const book = bibleData[currentBook];
+  var changed = false;
   if (currentChapter < book.chapters.length - 1) {
-    currentChapter++;
+    currentChapter++; changed = true;
   } else if (currentBook < bibleData.length - 1) {
     currentBook++;
     document.getElementById('book-select').value = currentBook;
     currentChapter = 0;
+    changed = true;
   }
+  if (!changed) return;
   selectedVerses.length = 0; lastSelectedVerse = null;
   renderChapter();
+  _pushChapterHistory();
 }
 
 function openChapterPicker() {
@@ -6328,6 +6353,19 @@ window.addEventListener('popstate', function(e) {
       history.pushState({ harp: true, view: 'list' }, '', '#harpa');
       if (typeof hp_confirmLeave === 'function') hp_confirmLeave();
     }
+    return;
+  }
+
+  // Navegação de capítulo (gesto/seta/botão) — desfaz para o capítulo anterior
+  if (state && state.chapNav && typeof state.book === 'number' && typeof state.chapter === 'number') {
+    _suppressChapterHistory = true;
+    currentBook = state.book;
+    currentChapter = state.chapter;
+    var bookSel = document.getElementById('book-select');
+    if (bookSel) bookSel.value = currentBook;
+    selectedVerses.length = 0; lastSelectedVerse = null;
+    renderChapter();
+    _suppressChapterHistory = false;
     return;
   }
 
