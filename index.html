@@ -6392,12 +6392,10 @@ window.addEventListener('popstate', function(e) {
     return;
   }
 
-  // Confirmação de saída
+  // Chegou ao estado-base (nada mais para desfazer). A confirmação de
+  // saída é sempre feita pela caixa elegante do back-navigation.js — aqui
+  // só mantemos o "chão" do histórico presente para o próximo Voltar.
   history.pushState({ biblia: true }, '', '#biblia');
-  if (confirm('Deseja sair do aplicativo?')) {
-    history.back();
-    history.back();
-  }
 });
 
 // Estado inicial da Bíblia
