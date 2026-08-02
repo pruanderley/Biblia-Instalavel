@@ -2542,7 +2542,8 @@
     <div class="panel-title">📝 ANOTAÇÃO</div>
     <button class="panel-close" onclick="closePanel('note-panel')">✕</button>
     <span class="note-ref-label" id="note-ref-label">—</span>
-    <textarea id="note-textarea" placeholder="Escreva sua anotação ou reflexão..."></textarea>
+    <textarea id="note-textarea" placeholder="Escreva sua anotação ou reflexão..."
+      autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true"></textarea>
     <div class="note-actions">
       <button class="note-del-btn" onclick="deleteNote()" title="Excluir anotação">🗑</button>
       <button class="note-save-btn" onclick="saveNote()">SALVAR ANOTAÇÃO</button>
