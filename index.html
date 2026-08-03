@@ -1379,6 +1379,7 @@
     width: 100%;
     flex: 1;
     min-height: 0;
+    overflow-y: auto;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1387,12 +1388,39 @@
     font-size: 17px;
     line-height: 1.7;
     padding: 16px;
-    resize: none;
-    margin-top: 10px;
+    margin-top: 8px;
     outline: none;
     transition: border-color 0.2s ease;
   }
   #note-textarea:focus { border-color: var(--accent-gold); }
+  #note-textarea:empty:before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  #note-textarea mark, #note-view-text mark {
+    background: #ffe066;
+    color: #2a2000;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  .note-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .note-toolbar button {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: 'Lato', sans-serif;
+    font-size: 13px;
+    padding: 8px 6px;
+    cursor: pointer;
+  }
+  .note-toolbar button:active { border-color: var(--accent-gold); }
   .note-ref-label {
     font-family: 'Cinzel', serif;
     font-size: 13px;
@@ -2542,8 +2570,13 @@
     <div class="panel-title">📝 ANOTAÇÃO</div>
     <button class="panel-close" onclick="closePanel('note-panel')">✕</button>
     <span class="note-ref-label" id="note-ref-label">—</span>
-    <textarea id="note-textarea" placeholder="Escreva sua anotação ou reflexão..."
-      autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true"></textarea>
+    <div class="note-toolbar">
+      <button type="button" title="Grifar" onmousedown="event.preventDefault()" onclick="hp_noteFormat('hilite')">🖍️ Grifar</button>
+      <button type="button" title="Sublinhar" onmousedown="event.preventDefault()" onclick="hp_noteFormat('underline')">U̲ Sublinhar</button>
+      <button type="button" title="Remover formatação da seleção" onmousedown="event.preventDefault()" onclick="hp_noteFormat('clear')">✕ Limpar</button>
+    </div>
+    <div id="note-textarea" contenteditable="true" data-placeholder="Escreva sua anotação ou reflexão..."
+      autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true"></div>
     <div class="note-actions">
       <button class="note-del-btn" onclick="deleteNote()" title="Excluir anotação">🗑</button>
       <button class="note-save-btn" onclick="saveNote()">SALVAR ANOTAÇÃO</button>
@@ -3145,7 +3178,7 @@ function openNoteEditor() {
   const book = bibleData[currentBook];
   document.getElementById('note-ref-label').textContent =
     `${book.name} ${currentChapter + 1}:${vi + 1}`;
-  document.getElementById('note-textarea').value = notes[key] || '';
+  document.getElementById('note-textarea').innerHTML = notes[key] || '';
   lastSelectedVerse = vi;
   openPanel('note-panel');
 }
@@ -3157,7 +3190,7 @@ function viewNote(verseIdx) {
   const book = bibleData[currentBook];
   document.getElementById('note-view-ref').textContent =
     `${book.name} ${currentChapter + 1}:${verseIdx + 1}`;
-  document.getElementById('note-view-text').textContent = note;
+  document.getElementById('note-view-text').innerHTML = note;
   lastSelectedVerse = verseIdx;
   if (selectedVerses.indexOf(verseIdx) < 0) selectedVerses.push(verseIdx);
   openPanel('note-view-panel');
@@ -3168,11 +3201,54 @@ function editNoteFromView() {
   setTimeout(() => openNoteEditor(), 200);
 }
 
+// Grifar/sublinhar/limpar formatação do trecho selecionado na anotação
+function hp_noteFormat(type) {
+  const editor = document.getElementById('note-textarea');
+  editor.focus();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    showToast('Selecione um trecho do texto primeiro');
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return;
+
+  if (type === 'underline') {
+    try { document.execCommand('underline'); } catch(e) {}
+    return;
+  }
+  if (type === 'hilite') {
+    const mark = document.createElement('mark');
+    try {
+      range.surroundContents(mark);
+    } catch(e) {
+      const frag = range.extractContents();
+      mark.appendChild(frag);
+      range.insertNode(mark);
+    }
+    sel.removeAllRanges();
+    return;
+  }
+  if (type === 'clear') {
+    try { document.execCommand('removeFormat'); } catch(e) {}
+    // remove também os <mark> do grifo dentro da seleção
+    const marks = editor.querySelectorAll('mark');
+    marks.forEach(m => {
+      if (range.intersectsNode(m)) {
+        const parent = m.parentNode;
+        while (m.firstChild) parent.insertBefore(m.firstChild, m);
+        parent.removeChild(m);
+      }
+    });
+  }
+}
+
 function saveNote() {
   if (lastSelectedVerse === null) return;
   const key = `${currentBook}-${currentChapter}-${lastSelectedVerse}`;
-  const txt = document.getElementById('note-textarea').value.trim();
-  if (txt) { notes[key] = txt; } else { delete notes[key]; }
+  const editor = document.getElementById('note-textarea');
+  const txt = editor.textContent.trim();
+  if (txt) { notes[key] = editor.innerHTML; } else { delete notes[key]; }
   saveNoteData();
   closePanel('note-panel');
   renderChapter(true);
