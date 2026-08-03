@@ -3300,11 +3300,24 @@ function hp_noteUpdateFloatToolbar() {
   const el = document.getElementById('note-float-toolbar');
   if (!editor || !panel || !el || !panel.classList.contains('open')) return;
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { hp_noteResetToolbarPosition(); return; }
+  // Seleção colapsada = só o cursor piscando (digitação normal, composição
+  // de acento, sugestão de palavra). Não mexe em nada do DOM nesse caso —
+  // mexer aqui a cada tecla atrapalhava o teclado do Android (sumia acento
+  // e sugestão). Só reseta a barra se ela estava flutuando antes.
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (el.classList.contains('floating')) hp_noteResetToolbarPosition();
+    return;
+  }
   const range = sel.getRangeAt(0);
-  if (!editor.contains(range.commonAncestorContainer)) { hp_noteResetToolbarPosition(); return; }
+  if (!editor.contains(range.commonAncestorContainer)) {
+    if (el.classList.contains('floating')) hp_noteResetToolbarPosition();
+    return;
+  }
   const rect = range.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) { hp_noteResetToolbarPosition(); return; }
+  if (rect.width === 0 && rect.height === 0) {
+    if (el.classList.contains('floating')) hp_noteResetToolbarPosition();
+    return;
+  }
 
   el.classList.add('floating');
   const elRect = el.getBoundingClientRect();
