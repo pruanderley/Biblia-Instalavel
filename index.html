@@ -1390,13 +1390,12 @@
     padding: 16px;
     margin-top: 8px;
     outline: none;
+    resize: none;
     transition: border-color 0.2s ease;
   }
   #note-textarea:focus { border-color: var(--accent-gold); }
-  #note-textarea:empty:before {
-    content: attr(data-placeholder);
+  #note-textarea::placeholder {
     color: var(--text-muted);
-    pointer-events: none;
   }
   #note-textarea mark, #note-view-text mark {
     background: none;
@@ -2586,8 +2585,11 @@
       <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('underline', this)">U̲ Sublinhar</button>
       <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('clear', this)">✕ Limpar</button>
     </div>
-    <div id="note-textarea" contenteditable="true" data-placeholder="Escreva sua anotação ou reflexão..."
-      autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true"></div>
+    <form onsubmit="return false;" autocomplete="on" style="display:contents;">
+      <textarea id="note-textarea" placeholder="Escreva sua anotação ou reflexão..."
+        autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true" 
+        inputmode="text" lang="pt-BR"></textarea>
+    </form>
     <div class="note-actions">
       <button class="note-del-btn" onclick="deleteNote()" title="Excluir anotação">🗑</button>
       <button class="note-save-btn" onclick="saveNote()">SALVAR ANOTAÇÃO</button>
@@ -3189,7 +3191,10 @@ function openNoteEditor() {
   const book = bibleData[currentBook];
   document.getElementById('note-ref-label').textContent =
     `${book.name} ${currentChapter + 1}:${vi + 1}`;
-  document.getElementById('note-textarea').innerHTML = notes[key] || '';
+  // Textarea usa .value, não innerHTML. Notas antigas com HTML são convertidas pra texto puro.
+  const notaRaw = notes[key] || '';
+  const tmp = document.createElement('div'); tmp.innerHTML = notaRaw;
+  document.getElementById('note-textarea').value = tmp.textContent || tmp.innerText || '';
   lastSelectedVerse = vi;
   openPanel('note-panel');
 }
@@ -3212,6 +3217,13 @@ function editNoteFromView() {
   setTimeout(() => openNoteEditor(), 200);
 }
 
+// ------------------------------------------------------------
+// CORREÇÃO: FLAG DE COMPOSIÇÃO E FORMATAÇÃO
+// ------------------------------------------------------------
+let isComposing = false;
+// Com textarea nativo, o IME do Android funciona sem interferência.
+// Os listeners de composição e a barra flutuante não são mais necessários.
+
 // Grifar/sublinhar/limpar formatação do trecho selecionado na anotação
 function hp_noteFlashBtn(btn) {
   if (!btn) return;
@@ -3220,6 +3232,9 @@ function hp_noteFlashBtn(btn) {
 }
 
 function hp_noteFormat(type, btn) {
+  // Se estiver no meio de uma composição de caractere acentuado, não formate
+  if (isComposing) return;
+
   hp_noteFlashBtn(btn);
   const editor = document.getElementById('note-textarea');
   editor.focus();
@@ -3295,6 +3310,8 @@ function hp_noteResetToolbarPosition() {
 }
 
 function hp_noteUpdateFloatToolbar() {
+  // Proteção contra interferência com IME do Android
+  if (isComposing) return;
   const editor = document.getElementById('note-textarea');
   const panel = document.getElementById('note-panel');
   const el = document.getElementById('note-float-toolbar');
@@ -3335,17 +3352,14 @@ function hp_noteUpdateFloatToolbar() {
   el.style.left = left + 'px';
 }
 
-document.addEventListener('selectionchange', function() {
-  clearTimeout(window._hp_noteSelTimer);
-  window._hp_noteSelTimer = setTimeout(hp_noteUpdateFloatToolbar, 30);
-});
+// selectionchange desativado — não é mais necessário com textarea nativo
 
 function saveNote() {
   if (lastSelectedVerse === null) return;
   const key = `${currentBook}-${currentChapter}-${lastSelectedVerse}`;
   const editor = document.getElementById('note-textarea');
-  const txt = editor.textContent.trim();
-  if (txt) { notes[key] = editor.innerHTML; } else { delete notes[key]; }
+  const txt = editor.value.trim();
+  if (txt) { notes[key] = txt; } else { delete notes[key]; }
   saveNoteData();
   closePanel('note-panel');
   renderChapter(true);
@@ -6740,3 +6754,4 @@ hp_loadFavorites();
   }, { passive: true });
 })();
 </script>
+[file content end]
