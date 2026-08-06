@@ -3242,7 +3242,7 @@ let isComposing = false;
   const ed = document.getElementById('note-textarea');
   if (!ed) return;
   ed.addEventListener('compositionstart', () => { isComposing = true; });
-  ed.addEventListener('compositionend', () => { setTimeout(() => { isComposing = false; }, 150); });
+  ed.addEventListener('compositionend', () => { isComposing = false; });
 })();
 
 function hp_noteFlashBtn(btn) {
@@ -3375,7 +3375,7 @@ function hp_noteUpdateFloatToolbar() {
 document.addEventListener('selectionchange', function() {
   if (isComposing) return;
   clearTimeout(window._hp_noteSelTimer);
-  window._hp_noteSelTimer = setTimeout(hp_noteUpdateFloatToolbar, 300);
+  window._hp_noteSelTimer = setTimeout(hp_noteUpdateFloatToolbar, 30);
 });
 
 function saveNote() {
