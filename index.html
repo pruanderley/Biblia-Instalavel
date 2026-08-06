@@ -1406,20 +1406,8 @@
   #note-float-toolbar {
     display: flex;
     gap: 6px;
-    padding: 8px 12px;
+    margin-top: 8px;
     flex-shrink: 0;
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    z-index: 60;
-    transition: none;
-  }
-  /* Quando o teclado está aberto, a barra flutua acima dele */
-  #note-float-toolbar.above-keyboard {
-    position: fixed;
-    left: 0; right: 0;
-    padding: 7px 16px;
-    box-shadow: 0 -3px 12px rgba(0,0,0,0.3);
   }
   #note-float-toolbar button {
     flex: 1;
@@ -1432,8 +1420,20 @@
     padding: 10px 8px;
     cursor: pointer;
     white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
   }
-  #note-float-toolbar button:active { background: rgba(212,165,40,0.28); }
+  #note-float-toolbar.floating {
+    position: fixed;
+    margin-top: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--accent-gold);
+    border-radius: 10px;
+    padding: 5px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    z-index: 99999;
+  }
+  #note-float-toolbar.floating button { flex: none; padding: 7px 9px; }
+  #note-float-toolbar button.pressed { background: rgba(212,165,40,0.28); }
   .note-ref-label {
     font-family: 'Cinzel', serif;
     font-size: 13px;
@@ -2584,13 +2584,14 @@
     <button class="panel-close" onclick="closePanel('note-panel')">✕</button>
     <span class="note-ref-label" id="note-ref-label">—</span>
     <div id="note-float-toolbar">
-      <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('bold')">𝐁 Negritar</button>
-      <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('underline')">U̲ Sublinhar</button>
-      <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('removeFormat')">✕ Limpar</button>
+      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('hilite', this)">𝐁 Negritar</button>
+      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('underline', this)">U̲ Sublinhar</button>
+      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('clear', this)">✕ Limpar</button>
     </div>
-    <div id="note-textarea" contenteditable="true" data-placeholder="Escreva sua anotação ou reflexão..."
-      spellcheck="true" autocapitalize="sentences" inputmode="text" lang="pt-BR"></div>
-    <div id="note-toolbar-bottom-anchor"></div>
+    <form onsubmit="return false;" autocomplete="on" style="display:contents;">
+      <div id="note-textarea" contenteditable="true" data-placeholder="Escreva sua anotação ou reflexão..."
+        autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true" inputmode="text" lang="pt-BR"></div>
+    </form>
     <div class="note-actions">
       <button class="note-del-btn" onclick="deleteNote()" title="Excluir anotação">🗑</button>
       <button class="note-save-btn" onclick="saveNote()">SALVAR ANOTAÇÃO</button>
@@ -3185,6 +3186,23 @@ function saveNoteData() {
   try { localStorage.setItem('jfa_notes', JSON.stringify(notes)); } catch(e){}
 }
 
+// Converte uma nota salva (em qualquer formato usado até aqui) em HTML
+// pronto pra exibir/editar: rich HTML novo, JSON {text,bold,underline}
+// de uma versão intermediária, ou texto puro do formato mais antigo.
+function hp_noteToHtml(raw) {
+  if (!raw) return '';
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj.text === 'string') {
+      let html = hp_esc(obj.text);
+      if (obj.underline) html = '<u>' + html + '</u>';
+      if (obj.bold) html = '<mark>' + html + '</mark>';
+      return html;
+    }
+  } catch(e) { /* não é JSON, segue abaixo */ }
+  return raw; // já é HTML (ou texto puro, que é HTML válido também)
+}
+
 function openNoteEditor() {
   if (selectedVerses.length === 0) { showToast('Toque em um versículo primeiro'); return; }
   const vi = lastSelectedVerse !== null ? lastSelectedVerse : selectedVerses.slice()[0];
@@ -3192,7 +3210,7 @@ function openNoteEditor() {
   const book = bibleData[currentBook];
   document.getElementById('note-ref-label').textContent =
     `${book.name} ${currentChapter + 1}:${vi + 1}`;
-  document.getElementById('note-textarea').innerHTML = notes[key] || '';
+  document.getElementById('note-textarea').innerHTML = hp_noteToHtml(notes[key]);
   lastSelectedVerse = vi;
   openPanel('note-panel');
 }
@@ -3204,7 +3222,7 @@ function viewNote(verseIdx) {
   const book = bibleData[currentBook];
   document.getElementById('note-view-ref').textContent =
     `${book.name} ${currentChapter + 1}:${verseIdx + 1}`;
-  document.getElementById('note-view-text').innerHTML = note;
+  document.getElementById('note-view-text').innerHTML = hp_noteToHtml(note);
   lastSelectedVerse = verseIdx;
   if (selectedVerses.indexOf(verseIdx) < 0) selectedVerses.push(verseIdx);
   openPanel('note-view-panel');
@@ -3215,13 +3233,18 @@ function editNoteFromView() {
   setTimeout(() => openNoteEditor(), 200);
 }
 
-// ------------------------------------------------------------
-// CORREÇÃO: FLAG DE COMPOSIÇÃO E FORMATAÇÃO
-// ------------------------------------------------------------
-let isComposing = false;
-// Formatação usa execCommand diretamente nos botões (sem listeners no editor = sem quebrar acentos)
-
 // Grifar/sublinhar/limpar formatação do trecho selecionado na anotação
+// Evita mexer no DOM enquanto o teclado está no meio de compor um acento
+// (ex.: ~  então  a  =  ã) — mexer durante a composição é o que quebrava
+// os acentos antes.
+let isComposing = false;
+(function() {
+  const ed = document.getElementById('note-textarea');
+  if (!ed) return;
+  ed.addEventListener('compositionstart', () => { isComposing = true; });
+  ed.addEventListener('compositionend', () => { isComposing = false; });
+})();
+
 function hp_noteFlashBtn(btn) {
   if (!btn) return;
   btn.classList.add('pressed');
@@ -3349,93 +3372,19 @@ function hp_noteUpdateFloatToolbar() {
   el.style.left = left + 'px';
 }
 
-// Formatação de notas agora usa marcadores de texto (*negrito*, _sublinhado_) via textarea
-
-// ── BARRA ACIMA DO TECLADO (via visualViewport — sem selectionchange, sem quebrar acentos) ──
-(function(){
-  var toolbar = document.getElementById('note-float-toolbar');
-  if (!toolbar) return;
-
-  function posicionar() {
-    var panel = document.getElementById('note-panel');
-    if (!panel || !panel.classList.contains('open')) {
-      toolbar.classList.remove('above-keyboard');
-      toolbar.style.bottom = '';
-      return;
-    }
-
-    var vv = window.visualViewport;
-    if (!vv) return;
-
-    // Se a viewport visual encolheu (teclado aberto), flutua acima do teclado
-    var alturaTotal = window.innerHeight || document.documentElement.clientHeight;
-    var alturaTeclado = alturaTotal - vv.height;
-
-    if (alturaTeclado > 100) {
-      // Teclado aberto — barra flutua logo acima dele
-      toolbar.classList.add('above-keyboard');
-      toolbar.style.bottom = alturaTeclado + 'px';
-    } else {
-      // Teclado fechado — barra volta à posição normal no fluxo
-      toolbar.classList.remove('above-keyboard');
-      toolbar.style.bottom = '';
-    }
-  }
-
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', posicionar);
-    window.visualViewport.addEventListener('scroll', posicionar);
-  }
-
-  // Fallback pra WebView do APK (visualViewport pode não funcionar)
-  // Detecta teclado via mudança de altura da janela + focus/blur do editor
-  var alturaInicial = window.innerHeight;
-  var editorEl = document.getElementById('note-textarea');
-
-  window.addEventListener('resize', function() {
-    var panel = document.getElementById('note-panel');
-    if (!panel || !panel.classList.contains('open')) return;
-    var alturaAtual = window.innerHeight;
-    var diferenca = alturaInicial - alturaAtual;
-    if (diferenca > 100) {
-      // Teclado aberto — barra flutua acima dele
-      toolbar.classList.add('above-keyboard');
-      toolbar.style.bottom = diferenca + 'px';
-    } else {
-      toolbar.classList.remove('above-keyboard');
-      toolbar.style.bottom = '';
-    }
-  });
-
-  if (editorEl) {
-    editorEl.addEventListener('focus', function() {
-      // No WebView, espera o teclado abrir e força reposicionamento
-      setTimeout(function() {
-        var diferenca = alturaInicial - window.innerHeight;
-        if (diferenca > 100) {
-          toolbar.classList.add('above-keyboard');
-          toolbar.style.bottom = diferenca + 'px';
-        }
-      }, 400);
-    });
-    editorEl.addEventListener('blur', function() {
-      setTimeout(function() {
-        toolbar.classList.remove('above-keyboard');
-        toolbar.style.bottom = '';
-      }, 200);
-    });
-  }
-
-  // Também checa quando o painel de notas abre/fecha
-  var observer = new MutationObserver(function(){ setTimeout(posicionar, 100); });
-  var notePanel = document.getElementById('note-panel');
-  if (notePanel) observer.observe(notePanel, { attributes: true, attributeFilter: ['class'] });
-})();
+document.addEventListener('selectionchange', function() {
+  if (isComposing) return;
+  clearTimeout(window._hp_noteSelTimer);
+  window._hp_noteSelTimer = setTimeout(hp_noteUpdateFloatToolbar, 30);
+});
 
 function saveNote() {
   if (lastSelectedVerse === null) return;
   const key = `${currentBook}-${currentChapter}-${lastSelectedVerse}`;
   const editor = document.getElementById('note-textarea');
+  // Remove os espaçadores invisíveis usados só pra ancorar o cursor durante
+  // a edição — não devem persistir na anotação salva.
+  editor.querySelectorAll('.hp-note-spacer').forEach(sp => sp.remove());
   const txt = editor.textContent.trim();
   if (txt) { notes[key] = editor.innerHTML; } else { delete notes[key]; }
   saveNoteData();
