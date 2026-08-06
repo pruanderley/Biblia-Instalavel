@@ -1390,12 +1390,13 @@
     padding: 16px;
     margin-top: 8px;
     outline: none;
-    resize: none;
     transition: border-color 0.2s ease;
   }
   #note-textarea:focus { border-color: var(--accent-gold); }
-  #note-textarea::placeholder {
+  #note-textarea:empty:before {
+    content: attr(data-placeholder);
     color: var(--text-muted);
+    pointer-events: none;
   }
   #note-textarea mark, #note-view-text mark {
     background: none;
@@ -1405,7 +1406,20 @@
   #note-float-toolbar {
     display: flex;
     gap: 6px;
-    margin-top: 8px;
+    padding: 8px 12px;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    z-index: 60;
+    transition: none;
+  }
+  /* Quando o teclado está aberto, a barra flutua acima dele */
+  #note-float-toolbar.above-keyboard {
+    position: fixed;
+    left: 0; right: 0;
+    padding: 7px 16px;
+    box-shadow: 0 -3px 12px rgba(0,0,0,0.3);
   }
   #note-float-toolbar button {
     flex: 1;
@@ -1415,22 +1429,11 @@
     color: var(--text-primary);
     font-family: 'Lato', sans-serif;
     font-size: 13px;
-    padding: 8px 6px;
+    padding: 10px 8px;
     cursor: pointer;
     white-space: nowrap;
   }
-  #note-float-toolbar.floating {
-    position: fixed;
-    margin-top: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--accent-gold);
-    border-radius: 10px;
-    padding: 5px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-    z-index: 99999;
-  }
-  #note-float-toolbar.floating button { flex: none; padding: 7px 9px; }
-  #note-float-toolbar button.pressed { background: rgba(212,165,40,0.28); }
+  #note-float-toolbar button:active { background: rgba(212,165,40,0.28); }
   .note-ref-label {
     font-family: 'Cinzel', serif;
     font-size: 13px;
@@ -2581,15 +2584,13 @@
     <button class="panel-close" onclick="closePanel('note-panel')">✕</button>
     <span class="note-ref-label" id="note-ref-label">—</span>
     <div id="note-float-toolbar">
-      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('hilite', this)">🖍️ Grifar</button>
-      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('underline', this)">U̲ Sublinhar</button>
-      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('clear', this)">✕ Limpar</button>
+      <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('bold')">𝐁 Negritar</button>
+      <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('underline')">U̲ Sublinhar</button>
+      <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('removeFormat')">✕ Limpar</button>
     </div>
-    <form onsubmit="return false;" autocomplete="on" style="display:contents;">
-      <textarea id="note-textarea" placeholder="Escreva sua anotação ou reflexão..."
-        autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true" 
-        inputmode="text" lang="pt-BR"></textarea>
-    </form>
+    <div id="note-textarea" contenteditable="true" data-placeholder="Escreva sua anotação ou reflexão..."
+      spellcheck="true" autocapitalize="sentences" inputmode="text" lang="pt-BR"></div>
+    <div id="note-toolbar-bottom-anchor"></div>
     <div class="note-actions">
       <button class="note-del-btn" onclick="deleteNote()" title="Excluir anotação">🗑</button>
       <button class="note-save-btn" onclick="saveNote()">SALVAR ANOTAÇÃO</button>
@@ -3191,10 +3192,7 @@ function openNoteEditor() {
   const book = bibleData[currentBook];
   document.getElementById('note-ref-label').textContent =
     `${book.name} ${currentChapter + 1}:${vi + 1}`;
-  // Textarea usa .value, não innerHTML. Notas antigas com HTML são convertidas pra texto puro.
-  const notaRaw = notes[key] || '';
-  const tmp = document.createElement('div'); tmp.innerHTML = notaRaw;
-  document.getElementById('note-textarea').value = tmp.textContent || tmp.innerText || '';
+  document.getElementById('note-textarea').innerHTML = notes[key] || '';
   lastSelectedVerse = vi;
   openPanel('note-panel');
 }
@@ -3221,8 +3219,7 @@ function editNoteFromView() {
 // CORREÇÃO: FLAG DE COMPOSIÇÃO E FORMATAÇÃO
 // ------------------------------------------------------------
 let isComposing = false;
-// Com textarea nativo, o IME do Android funciona sem interferência.
-// Os listeners de composição e a barra flutuante não são mais necessários.
+// Formatação usa execCommand diretamente nos botões (sem listeners no editor = sem quebrar acentos)
 
 // Grifar/sublinhar/limpar formatação do trecho selecionado na anotação
 function hp_noteFlashBtn(btn) {
@@ -3352,14 +3349,56 @@ function hp_noteUpdateFloatToolbar() {
   el.style.left = left + 'px';
 }
 
-// selectionchange desativado — não é mais necessário com textarea nativo
+// Formatação de notas agora usa marcadores de texto (*negrito*, _sublinhado_) via textarea
+
+// ── BARRA ACIMA DO TECLADO (via visualViewport — sem selectionchange, sem quebrar acentos) ──
+(function(){
+  var toolbar = document.getElementById('note-float-toolbar');
+  if (!toolbar) return;
+
+  function posicionar() {
+    var panel = document.getElementById('note-panel');
+    if (!panel || !panel.classList.contains('open')) {
+      toolbar.classList.remove('above-keyboard');
+      toolbar.style.bottom = '';
+      return;
+    }
+
+    var vv = window.visualViewport;
+    if (!vv) return;
+
+    // Se a viewport visual encolheu (teclado aberto), flutua acima do teclado
+    var alturaTotal = window.innerHeight || document.documentElement.clientHeight;
+    var alturaTeclado = alturaTotal - vv.height;
+
+    if (alturaTeclado > 100) {
+      // Teclado aberto — barra flutua logo acima dele
+      toolbar.classList.add('above-keyboard');
+      toolbar.style.bottom = alturaTeclado + 'px';
+    } else {
+      // Teclado fechado — barra volta à posição normal no fluxo
+      toolbar.classList.remove('above-keyboard');
+      toolbar.style.bottom = '';
+    }
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', posicionar);
+    window.visualViewport.addEventListener('scroll', posicionar);
+  }
+
+  // Também checa quando o painel de notas abre/fecha
+  var observer = new MutationObserver(function(){ setTimeout(posicionar, 100); });
+  var notePanel = document.getElementById('note-panel');
+  if (notePanel) observer.observe(notePanel, { attributes: true, attributeFilter: ['class'] });
+})();
 
 function saveNote() {
   if (lastSelectedVerse === null) return;
   const key = `${currentBook}-${currentChapter}-${lastSelectedVerse}`;
   const editor = document.getElementById('note-textarea');
-  const txt = editor.value.trim();
-  if (txt) { notes[key] = txt; } else { delete notes[key]; }
+  const txt = editor.textContent.trim();
+  if (txt) { notes[key] = editor.innerHTML; } else { delete notes[key]; }
   saveNoteData();
   closePanel('note-panel');
   renderChapter(true);
