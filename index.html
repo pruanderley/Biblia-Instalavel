@@ -3387,6 +3387,45 @@ function hp_noteUpdateFloatToolbar() {
     window.visualViewport.addEventListener('scroll', posicionar);
   }
 
+  // Fallback pra WebView do APK (visualViewport pode não funcionar)
+  // Detecta teclado via mudança de altura da janela + focus/blur do editor
+  var alturaInicial = window.innerHeight;
+  var editorEl = document.getElementById('note-textarea');
+
+  window.addEventListener('resize', function() {
+    var panel = document.getElementById('note-panel');
+    if (!panel || !panel.classList.contains('open')) return;
+    var alturaAtual = window.innerHeight;
+    var diferenca = alturaInicial - alturaAtual;
+    if (diferenca > 100) {
+      // Teclado aberto — barra flutua acima dele
+      toolbar.classList.add('above-keyboard');
+      toolbar.style.bottom = diferenca + 'px';
+    } else {
+      toolbar.classList.remove('above-keyboard');
+      toolbar.style.bottom = '';
+    }
+  });
+
+  if (editorEl) {
+    editorEl.addEventListener('focus', function() {
+      // No WebView, espera o teclado abrir e força reposicionamento
+      setTimeout(function() {
+        var diferenca = alturaInicial - window.innerHeight;
+        if (diferenca > 100) {
+          toolbar.classList.add('above-keyboard');
+          toolbar.style.bottom = diferenca + 'px';
+        }
+      }, 400);
+    });
+    editorEl.addEventListener('blur', function() {
+      setTimeout(function() {
+        toolbar.classList.remove('above-keyboard');
+        toolbar.style.bottom = '';
+      }, 200);
+    });
+  }
+
   // Também checa quando o painel de notas abre/fecha
   var observer = new MutationObserver(function(){ setTimeout(posicionar, 100); });
   var notePanel = document.getElementById('note-panel');
