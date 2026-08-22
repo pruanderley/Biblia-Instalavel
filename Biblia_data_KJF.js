@@ -1,5 +1,5 @@
 // Biblia_data.js
-// Bíblia Sagrada JFA — Revista e Corrigida
+// Bíblia Sagrada KJF — Revista e Corrigida
 // Convertida em 21/08/2026, 11:54:19
 // Total: 66 livros, 1421 capítulos, 37893 versículos
 
@@ -41071,8 +41071,8 @@ window.bibleData_KJF = [
   }
 ];
 
-// Expor como window.bibleData_JFA para não conflitar com outras versões
-window.bibleData_JFA = bibleDataExterno;
+// Expor como window.bibleData_KJF para não conflitar com outras versões
+window.bibleData_KJF = bibleDataExterno;
 
 // Também expor como window.bibleData (compatibilidade)
 window.bibleData = bibleDataExterno;

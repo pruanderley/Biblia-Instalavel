@@ -36433,8 +36433,8 @@ window.bibleData_JFA = [
   }
 ];
 
-// Expor como window.bibleData_KJF para não conflitar com outras versões
-window.bibleData_KJF = bibleDataExterno;
+// Expor como window.bibleData_JFA para não conflitar com outras versões
+window.bibleData_JFA = bibleDataExterno;
 
 // Também expor como window.bibleData (compatibilidade)
 window.bibleData = bibleDataExterno;
