@@ -20,7 +20,7 @@
      Coloque o arquivo Biblia_data.js na mesma pasta que este HTML
      ======================================================== -->
 <!-- 🔥 SELETOR DE VERSÕES (SIMPLES E VISÍVEL) -->
-<script src="bible-versions-FINAL.js" defer></script>
+    <script src="bible-versions-FINAL-v2.js" defer></script>
 <script src="Harpa_data.js" defer></script>
 
 
@@ -6477,9 +6477,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('🔥 Iniciando Bíblia com Seletor de Versões...');
   
   // ✅ CONFIGURE AQUI SUAS VERSÕES
-  await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH'], 'JFA');
+  // Exemplo: await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH'], 'JFA');
   
-  await BibleVersionsSimple.init(['JFA', 'NVI', 'ARA'], 'JFA');
+  await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH'], 'JFA');
   
   console.log('✅ Seletor Pronto!');
   console.log('📖 Versão Ativa:', BibleVersionsSimple.currentVersion);
@@ -6489,24 +6489,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('📖 Versão mudou para:', e.detail.version);
     // Se precisar recarregar verso: renderChapter();
   });
-});
-</script>
-
-<!-- Listener para dados prontos -->
-<script>
-window.addEventListener('bible-data-ready', () => {
-  console.log('✅ Dados prontos! Renderizando...');
-  if (typeof renderChapter === 'function') {
-    renderChapter();
-  }
-});
-
-// Se os dados já estão prontos (carregamento rápido)
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof renderChapter === 'function' && window.bibleDataExterno) {
-    console.log('📖 Dados já prontos no DOMContentLoaded');
-    renderChapter();
-  }
 });
 </script>
 </body>

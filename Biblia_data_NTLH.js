@@ -36457,3 +36457,9 @@ const bibleDataExterno = [
     ]
   }
 ];
+
+// Expor como window.bibleData_NTLH para não conflitar com outras versões
+window.bibleData_NTLH = bibleDataExterno;
+
+// Também expor como window.bibleData (compatibilidade)
+window.bibleData = bibleDataExterno;

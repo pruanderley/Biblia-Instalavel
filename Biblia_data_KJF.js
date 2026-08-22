@@ -36432,3 +36432,9 @@ const bibleDataExterno = [
     ]
   }
 ];
+
+// Expor como window.bibleData_KJF para não conflitar com outras versões
+window.bibleData_KJF = bibleDataExterno;
+
+// Também expor como window.bibleData (compatibilidade)
+window.bibleData = bibleDataExterno;
