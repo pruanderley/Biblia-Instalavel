@@ -1,5 +1,5 @@
 // Biblia_data.js
-// Bíblia Sagrada JFA — Revista e Corrigida
+// Bíblia Sagrada NLTH — Revista e Corrigida
 // Convertida em 22/08/2026, 12:52:37
 // Total: 66 livros, 1259 capítulos, 33604 versículos
 

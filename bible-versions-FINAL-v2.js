@@ -6,7 +6,7 @@
  * - window.bibleData_KJF
  * - window.bibleData_NTLH
  * - window.bibleData_JFA
-
+ *
  * SEM CONFLITOS DE DECLARAÇÃO
  * CARREGA TODAS AS 4 VERSÕES
  * FUNCIONA 100%!
