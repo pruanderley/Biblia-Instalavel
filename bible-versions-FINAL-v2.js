@@ -140,6 +140,9 @@ class BibleVersionsSimple {
     localStorage.setItem('biblia_version', versionName);
     this.updateButton();
     
+    // Dispara evento pra o app atualizar o bibleData local
+    window.dispatchEvent(new CustomEvent('bible-version-changed', { detail: { version: versionName } }));
+    
     console.log(`%c✅ ${versionName} ativado! (${this.versions[versionName].length} livros)`, 'color: #90EE90; font-weight: bold;');
     
     // Renderiza novo verso

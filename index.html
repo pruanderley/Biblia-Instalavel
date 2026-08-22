@@ -6484,10 +6484,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('✅ Seletor Pronto!');
   console.log('📖 Versão Ativa:', BibleVersionsSimple.currentVersion);
   
-  // Escuta mudanças de versão
+  // Escuta mudanças de versão — atualiza o bibleData LOCAL e re-renderiza
   window.addEventListener('bible-version-changed', (e) => {
     console.log('📖 Versão mudou para:', e.detail.version);
-    // Se precisar recarregar verso: renderChapter();
+    bibleData = window.bibleDataExterno;
+    buildBookSelect();
+    renderChapter();
   });
 });
 </script>
