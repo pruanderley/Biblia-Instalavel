@@ -19,8 +19,10 @@
      ADICIONE O ARQUIVO DE DADOS AQUI:
      Coloque o arquivo Biblia_data.js na mesma pasta que este HTML
      ======================================================== -->
-<script src="Biblia_data.js" defer></script>
+<!-- 🔥 SELETOR DE VERSÕES (SIMPLES E VISÍVEL) -->
+<script src="bible-versions-FINAL.js" defer></script>
 <script src="Harpa_data.js" defer></script>
+
 
 <style>
   :root {
@@ -546,7 +548,7 @@
     transform: scale(0.75) translateX(-50%);
     opacity: 0;
     pointer-events: none;
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    transition: transform 0.2s ease, opacity 0.2s ease, bottom 0.2s ease;
     transform-origin: center bottom;
     left: 50%;
     bottom: 20px;
@@ -1379,7 +1381,6 @@
     width: 100%;
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1388,52 +1389,12 @@
     font-size: 17px;
     line-height: 1.7;
     padding: 16px;
-    margin-top: 8px;
+    resize: none;
+    margin-top: 10px;
     outline: none;
     transition: border-color 0.2s ease;
   }
   #note-textarea:focus { border-color: var(--accent-gold); }
-  #note-textarea:empty:before {
-    content: attr(data-placeholder);
-    color: var(--text-muted);
-    pointer-events: none;
-  }
-  #note-textarea mark, #note-view-text mark {
-    background: none;
-    color: inherit;
-    font-weight: 700;
-  }
-  #note-float-toolbar {
-    display: flex;
-    gap: 6px;
-    margin-top: 8px;
-    flex-shrink: 0;
-  }
-  #note-float-toolbar button {
-    flex: 1;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-primary);
-    font-family: 'Lato', sans-serif;
-    font-size: 13px;
-    padding: 10px 8px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  #note-float-toolbar.floating {
-    position: fixed;
-    margin-top: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--accent-gold);
-    border-radius: 10px;
-    padding: 5px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-    z-index: 99999;
-  }
-  #note-float-toolbar.floating button { flex: none; padding: 7px 9px; }
-  #note-float-toolbar button.pressed { background: rgba(212,165,40,0.28); }
   .note-ref-label {
     font-family: 'Cinzel', serif;
     font-size: 13px;
@@ -2583,15 +2544,8 @@
     <div class="panel-title">📝 ANOTAÇÃO</div>
     <button class="panel-close" onclick="closePanel('note-panel')">✕</button>
     <span class="note-ref-label" id="note-ref-label">—</span>
-    <div id="note-float-toolbar">
-      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('hilite', this)">𝐁 Negritar</button>
-      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('underline', this)">U̲ Sublinhar</button>
-      <button type="button" onmousedown="event.preventDefault()" onclick="hp_noteFormat('clear', this)">✕ Limpar</button>
-    </div>
-    <form onsubmit="return false;" autocomplete="on" style="display:contents;">
-      <div id="note-textarea" contenteditable="true" data-placeholder="Escreva sua anotação ou reflexão..."
-        autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true" inputmode="text" lang="pt-BR"></div>
-    </form>
+    <textarea id="note-textarea" placeholder="Escreva sua anotação ou reflexão..."
+      autocomplete="on" autocorrect="on" autocapitalize="sentences" spellcheck="true"></textarea>
     <div class="note-actions">
       <button class="note-del-btn" onclick="deleteNote()" title="Excluir anotação">🗑</button>
       <button class="note-save-btn" onclick="saveNote()">SALVAR ANOTAÇÃO</button>
@@ -2862,11 +2816,36 @@ function selectVerse(idx) {
 
 function showVerseMenu(verseEl) {
   var menu = document.getElementById('verse-menu');
+  menu.style.bottom = '20px'; // garante que começa da posição padrão antes de medir
   menu.classList.add('visible');
+  // Se o versículo tocado ficar perto do fim da tela, o menu (fixo embaixo)
+  // pode cobrir ele — nesse caso o MENU sobe (não a página), o equivalente
+  // a uns 3 versículos de folga. Espera a animação de abertura terminar
+  // antes de medir (senão pega o tamanho dele ainda encolhido).
+  setTimeout(function() {
+    var vRect = verseEl.getBoundingClientRect();
+    var mRect = menu.getBoundingClientRect();
+    var overlap = vRect.bottom - mRect.top;
+    if (overlap <= -20) return; // já tem espaço de sobra, não precisa subir
+
+    // Soma a altura de até 3 versículos anteriores ao tocado, como folga
+    var extra = 0, count = 0, sib = verseEl.previousElementSibling;
+    while (sib && count < 3) {
+      if (sib.classList && sib.classList.contains('verse')) {
+        extra += sib.getBoundingClientRect().height;
+        count++;
+      }
+      sib = sib.previousElementSibling;
+    }
+    var raise = Math.max(overlap + 20, extra || (overlap + 20));
+    menu.style.bottom = (20 + raise) + 'px';
+  }, 250);
 }
 
 function hideVerseMenu() {
-  document.getElementById('verse-menu').classList.remove('visible');
+  var menu = document.getElementById('verse-menu');
+  menu.classList.remove('visible');
+  menu.style.bottom = '20px';
 }
 
 function vmHighlight() {
@@ -3186,21 +3165,21 @@ function saveNoteData() {
   try { localStorage.setItem('jfa_notes', JSON.stringify(notes)); } catch(e){}
 }
 
-// Converte uma nota salva (em qualquer formato usado até aqui) em HTML
-// pronto pra exibir/editar: rich HTML novo, JSON {text,bold,underline}
-// de uma versão intermediária, ou texto puro do formato mais antigo.
-function hp_noteToHtml(raw) {
+// Converte uma nota salva (em qualquer formato usado até aqui) em texto
+// puro pra exibir: HTML rico ou JSON {text,bold,underline} de versões
+// anteriores viram só o texto, já que o campo voltou a ser simples.
+function hp_noteToPlainText(raw) {
   if (!raw) return '';
   try {
     const obj = JSON.parse(raw);
-    if (obj && typeof obj.text === 'string') {
-      let html = hp_esc(obj.text);
-      if (obj.underline) html = '<u>' + html + '</u>';
-      if (obj.bold) html = '<mark>' + html + '</mark>';
-      return html;
-    }
+    if (obj && typeof obj.text === 'string') return obj.text;
   } catch(e) { /* não é JSON, segue abaixo */ }
-  return raw; // já é HTML (ou texto puro, que é HTML válido também)
+  if (raw.indexOf('<') >= 0) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = raw;
+    return tmp.textContent || tmp.innerText || '';
+  }
+  return raw;
 }
 
 function openNoteEditor() {
@@ -3210,7 +3189,7 @@ function openNoteEditor() {
   const book = bibleData[currentBook];
   document.getElementById('note-ref-label').textContent =
     `${book.name} ${currentChapter + 1}:${vi + 1}`;
-  document.getElementById('note-textarea').innerHTML = hp_noteToHtml(notes[key]);
+  document.getElementById('note-textarea').value = hp_noteToPlainText(notes[key]);
   lastSelectedVerse = vi;
   openPanel('note-panel');
 }
@@ -3222,7 +3201,7 @@ function viewNote(verseIdx) {
   const book = bibleData[currentBook];
   document.getElementById('note-view-ref').textContent =
     `${book.name} ${currentChapter + 1}:${verseIdx + 1}`;
-  document.getElementById('note-view-text').innerHTML = hp_noteToHtml(note);
+  document.getElementById('note-view-text').textContent = hp_noteToPlainText(note);
   lastSelectedVerse = verseIdx;
   if (selectedVerses.indexOf(verseIdx) < 0) selectedVerses.push(verseIdx);
   openPanel('note-view-panel');
@@ -3233,160 +3212,11 @@ function editNoteFromView() {
   setTimeout(() => openNoteEditor(), 200);
 }
 
-// Grifar/sublinhar/limpar formatação do trecho selecionado na anotação
-// Evita mexer no DOM enquanto o teclado está no meio de compor um acento
-// (ex.: ~  então  a  =  ã) — mexer durante a composição é o que quebrava
-// os acentos antes.
-let isComposing = false;
-(function() {
-  const ed = document.getElementById('note-textarea');
-  if (!ed) return;
-  ed.addEventListener('compositionstart', () => { isComposing = true; });
-  ed.addEventListener('compositionend', () => { isComposing = false; });
-})();
-
-function hp_noteFlashBtn(btn) {
-  if (!btn) return;
-  btn.classList.add('pressed');
-  setTimeout(() => btn.classList.remove('pressed'), 150);
-}
-
-function hp_noteFormat(type, btn) {
-  // Se estiver no meio de uma composição de caractere acentuado, não formate
-  if (isComposing) return;
-
-  hp_noteFlashBtn(btn);
-  const editor = document.getElementById('note-textarea');
-  editor.focus();
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-    showToast('Selecione um trecho do texto primeiro');
-    return;
-  }
-  const range = sel.getRangeAt(0);
-  if (!editor.contains(range.commonAncestorContainer)) return;
-
-  if (type === 'clear') {
-    try { document.execCommand('removeFormat'); } catch(e) {}
-    const nodes = editor.querySelectorAll('mark, u');
-    nodes.forEach(m => {
-      if (range.intersectsNode(m)) {
-        const parent = m.parentNode;
-        while (m.firstChild) parent.insertBefore(m.firstChild, m);
-        parent.removeChild(m);
-      }
-    });
-    hp_noteResetToolbarPosition();
-    return;
-  }
-
-  const wrapper = document.createElement(type === 'underline' ? 'u' : 'mark');
-  try {
-    range.surroundContents(wrapper);
-  } catch(e) {
-    const frag = range.extractContents();
-    wrapper.appendChild(frag);
-    range.insertNode(wrapper);
-  }
-  // Cria um espaço invisível de verdade logo depois do trecho formatado,
-  // dentro de um <span> com estilo explicitamente normal, e põe o cursor
-  // nele. Só mover o cursor pro limite não é suficiente: o navegador tende
-  // a "herdar" o negrito/sublinhado de quem está do lado no mesmo parágrafo
-  // (só quebra sozinho numa linha nova) — por isso forçamos aqui um estilo
-  // contrário explícito, não só a posição do cursor.
-  const spacer = document.createElement('span');
-  spacer.style.fontWeight = 'normal';
-  spacer.style.fontStyle = 'normal';
-  spacer.style.textDecoration = 'none';
-  const spacerText = document.createTextNode('\u200B');
-  spacer.appendChild(spacerText);
-  wrapper.parentNode.insertBefore(spacer, wrapper.nextSibling);
-  function hp_notePlaceCursorAfterSpacer() {
-    editor.focus();
-    const s2 = window.getSelection();
-    const r2 = document.createRange();
-    r2.setStart(spacerText, 1);
-    r2.collapse(true);
-    s2.removeAllRanges();
-    s2.addRange(r2);
-  }
-  hp_notePlaceCursorAfterSpacer();
-  // Reforça no próximo instante: em alguns teclados Android, o IME só
-  // sincroniza a posição real do cursor depois que o navegador termina de
-  // processar a mudança do DOM, então uma segunda tentativa garante o efeito.
-  setTimeout(hp_notePlaceCursorAfterSpacer, 0);
-  hp_noteResetToolbarPosition();
-}
-
-// Barra de formatação: fica fixa no topo do editor por padrão (pra o usuário
-// ver que a opção existe) e "flutua" perto da seleção quando há um trecho
-// selecionado, evitando brigar de posição com o menu nativo do Android.
-function hp_noteResetToolbarPosition() {
-  const el = document.getElementById('note-float-toolbar');
-  if (!el) return;
-  el.classList.remove('floating');
-  el.style.top = '';
-  el.style.left = '';
-}
-
-function hp_noteUpdateFloatToolbar() {
-  // Proteção contra interferência com IME do Android
-  if (isComposing) return;
-  const editor = document.getElementById('note-textarea');
-  const panel = document.getElementById('note-panel');
-  const el = document.getElementById('note-float-toolbar');
-  if (!editor || !panel || !el || !panel.classList.contains('open')) return;
-  const sel = window.getSelection();
-  // Seleção colapsada = só o cursor piscando (digitação normal, composição
-  // de acento, sugestão de palavra). Não mexe em nada do DOM nesse caso —
-  // mexer aqui a cada tecla atrapalhava o teclado do Android (sumia acento
-  // e sugestão). Só reseta a barra se ela estava flutuando antes.
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-    if (el.classList.contains('floating')) hp_noteResetToolbarPosition();
-    return;
-  }
-  const range = sel.getRangeAt(0);
-  if (!editor.contains(range.commonAncestorContainer)) {
-    if (el.classList.contains('floating')) hp_noteResetToolbarPosition();
-    return;
-  }
-  const rect = range.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) {
-    if (el.classList.contains('floating')) hp_noteResetToolbarPosition();
-    return;
-  }
-
-  el.classList.add('floating');
-  const elRect = el.getBoundingClientRect();
-  const margin = 10;
-  // Prefere aparecer ABAIXO da seleção (o menu nativo do Android tende a
-  // preferir ACIMA quando há espaço, então isso ajuda a não se sobreporem)
-  let top = rect.bottom + margin;
-  if (top + elRect.height > window.innerHeight - 10) {
-    top = rect.top - elRect.height - margin;
-    if (top < 10) top = 10;
-  }
-  let left = rect.left + (rect.width / 2) - (elRect.width / 2);
-  left = Math.max(8, Math.min(left, window.innerWidth - elRect.width - 8));
-  el.style.top = top + 'px';
-  el.style.left = left + 'px';
-}
-
-document.addEventListener('selectionchange', function() {
-  if (isComposing) return;
-  clearTimeout(window._hp_noteSelTimer);
-  window._hp_noteSelTimer = setTimeout(hp_noteUpdateFloatToolbar, 30);
-});
-
 function saveNote() {
   if (lastSelectedVerse === null) return;
   const key = `${currentBook}-${currentChapter}-${lastSelectedVerse}`;
-  const editor = document.getElementById('note-textarea');
-  // Remove os espaçadores invisíveis usados só pra ancorar o cursor durante
-  // a edição — não devem persistir na anotação salva.
-  editor.querySelectorAll('.hp-note-spacer').forEach(sp => sp.remove());
-  const txt = editor.textContent.trim();
-  if (txt) { notes[key] = editor.innerHTML; } else { delete notes[key]; }
+  const txt = document.getElementById('note-textarea').value.trim();
+  if (txt) { notes[key] = txt; } else { delete notes[key]; }
   saveNoteData();
   closePanel('note-panel');
   renderChapter(true);
@@ -5505,7 +5335,6 @@ function openPanel(id)  {
 
 function closePanel(id) {
   document.getElementById(id).classList.remove('open');
-  if (id === 'note-panel' && typeof hp_noteResetToolbarPosition === 'function') hp_noteResetToolbarPosition();
 }
 
 function closePanelIfOutside(e, id) {
@@ -6641,6 +6470,45 @@ window.addEventListener('popstate', function(e) {
 history.replaceState({ biblia: true }, '', '#biblia');
 </script>
 <script src="back-navigation.js"></script>
+
+<!-- 🔥 INICIALIZAR SELETOR DE VERSÕES -->
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('🔥 Iniciando Bíblia com Seletor de Versões...');
+  
+  // ✅ CONFIGURE AQUI SUAS VERSÕES
+  await BibleVersionsSimple.init(['JFA', 'KJF', 'NTLH'], 'JFA');
+  
+  await BibleVersionsSimple.init(['JFA', 'NVI', 'ARA'], 'JFA');
+  
+  console.log('✅ Seletor Pronto!');
+  console.log('📖 Versão Ativa:', BibleVersionsSimple.currentVersion);
+  
+  // Escuta mudanças de versão
+  window.addEventListener('bible-version-changed', (e) => {
+    console.log('📖 Versão mudou para:', e.detail.version);
+    // Se precisar recarregar verso: renderChapter();
+  });
+});
+</script>
+
+<!-- Listener para dados prontos -->
+<script>
+window.addEventListener('bible-data-ready', () => {
+  console.log('✅ Dados prontos! Renderizando...');
+  if (typeof renderChapter === 'function') {
+    renderChapter();
+  }
+});
+
+// Se os dados já estão prontos (carregamento rápido)
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof renderChapter === 'function' && window.bibleDataExterno) {
+    console.log('📖 Dados já prontos no DOMContentLoaded');
+    renderChapter();
+  }
+});
+</script>
 </body>
 </html>
 
