@@ -36440,4 +36440,3 @@ window.bibleData_NVI = bibleDataExterno;
 
 // Também expor como window.bibleData (compatibilidade)
 window.bibleData = bibleDataExterno;
-
