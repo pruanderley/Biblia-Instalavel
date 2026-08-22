@@ -3,7 +3,7 @@
 // Convertida em 21/08/2026, 11:54:19
 // Total: 66 livros, 1421 capítulos, 37893 versículos
 
-const bibleDataExterno = [
+window.bibleData_JFA = [
   {
     "name": "Gênesis",
     "chapters": [
