@@ -492,15 +492,15 @@
   .verse {
     display: flex;
     gap: 10px;
-    padding: 10px 14px;
-    border-radius: 10px;
+    padding: 6px 10px;
+    border-radius: 8px;
     margin-bottom: 4px;
     cursor: pointer;
-    transition: background var(--transition), box-shadow var(--transition);
+    transition: background var(--transition);
     position: relative;
-    line-height: 1.8;
+    line-height: 1.75;
   }
-  .verse:hover { background: rgba(255,255,255,0.04); box-shadow: 0 1px 6px rgba(0,0,0,0.15); }
+  .verse:hover { background: rgba(255,255,255,0.03); }
   .verse.selected { background: rgba(201,148,74,0.10); outline: 1px solid rgba(201,148,74,0.25); }
 
   .verse-num {
@@ -508,11 +508,11 @@
     font-size: 11px;
     color: var(--accent-gold);
     font-weight: 600;
-    min-width: 24px;
-    text-align: right;
-    padding-top: 5px;
+    min-width: 18px;
+    text-align: left;
+    padding-top: 4px;
     flex-shrink: 0;
-    opacity: 0.75;
+    opacity: 0.8;
   }
   .verse-text {
     flex: 1;
@@ -6491,7 +6491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('📖 Versão mudou para:', e.detail.version);
     bibleData = window.bibleDataExterno;
     buildBookSelect();
-    renderChapter();
+    renderChapter(true);
   });
 });
 </script>

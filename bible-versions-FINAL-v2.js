@@ -2,13 +2,12 @@
  * 🔥 SELETOR DE VERSÕES - VERSÃO FINAL v2
  * 
  * Procura pelos nomes corretos:
- * - window.bibleData_NVI
+ * - window.bibleData_JFA
  * - window.bibleData_KJF
  * - window.bibleData_NTLH
- * - window.bibleData_JFA
- *
+ * 
  * SEM CONFLITOS DE DECLARAÇÃO
- * CARREGA TODAS AS 4 VERSÕES
+ * CARREGA TODAS AS 3 VERSÕES
  * FUNCIONA 100%!
  */
 
@@ -66,7 +65,7 @@ class BibleVersionsSimple {
       
       if (typeof renderChapter === 'function') {
         try {
-          renderChapter();
+          renderChapter(true);
           console.log(`%c✅ Verso renderizado com sucesso!`, 'color: #90EE90; font-weight: bold;');
         } catch (e) {
           console.error(`%c❌ Erro ao renderizar:`, 'color: red', e.message);
@@ -150,7 +149,7 @@ class BibleVersionsSimple {
     setTimeout(() => {
       if (typeof renderChapter === 'function') {
         try {
-          renderChapter();
+          renderChapter(true);
           console.log(`%c✅ Verso renderizado em ${versionName}!`, 'color: #90EE90; font-weight: bold;');
         } catch (e) {
           console.error(`%c❌ Erro ao renderizar:`, 'color: red', e.message);
