@@ -80,7 +80,7 @@ class BibleVersionsSimple {
       console.log(`%c⏳ ${versionName}: Carregando arquivo...`, 'color: #c4a06a; font-weight: bold;');
       
       const script = document.createElement('script');
-      script.src = `Biblia_data_${versionName}.js?t=${Date.now()}`;
+      script.src = `Biblia_data_${versionName}.js`;
       
       script.onload = () => {
         console.log(`%c  ✓ Arquivo carregado, procurando dados...`, 'color: #90EE90; font-size: 11px;');

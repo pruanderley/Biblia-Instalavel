@@ -1,14 +1,21 @@
 // ── Bíblia JFA — Service Worker ──────────────────────────
-const CACHE_NAME = 'biblia-jfa-v3';
+const CACHE_NAME = 'biblia-jfa-v4';
 
 // Arquivos essenciais que ficam em cache (funcionam offline)
 const CACHE_FILES = [
   './',
   './index.html',
-  './Biblia_data.js',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './icon.png',
+  './bible-versions-FINAL-v2.js',
+  './Biblia_data_JFA.js',
+  './Biblia_data_KJF.js',
+  './Biblia_data_NTLH.js',
+  './Biblia_data_NVI.js',
+  './Harpa_data.js',
+  './back-navigation.js'
 ];
 
 // ── INSTALAR: cria o cache ────────────────────────────────
