@@ -4645,6 +4645,14 @@ function loadSettings() {
         document.querySelectorAll('.sb-color-btn').forEach(btn => {
           btn.classList.toggle('active', btn.dataset.color === currentStatusBarColor);
         });
+        // Aplica de verdade na barra nativa do Android — antes, ao carregar,
+        // só o meta tag e os botões eram atualizados, nunca a barra real,
+        // por isso a cor não sobrevivia a fechar e abrir o app de novo.
+        try {
+          if (window.Android && window.Android.setStatusBarColor) {
+            window.Android.setStatusBarColor(currentStatusBarColor);
+          }
+        } catch(e) {}
       }
     }
   } catch(e){}
