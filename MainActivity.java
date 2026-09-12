@@ -13,7 +13,6 @@ import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
-import android.webkit.WebSettings;
 import com.getcapacitor.BridgeActivity;
 import org.json.JSONArray;
 import java.util.Locale;
@@ -47,37 +46,7 @@ public class MainActivity extends BridgeActivity {
 
         webView = getBridge().getWebView();
         webView.addJavascriptInterface(new TTSBridge(), "Android");
-
-        // ── Configurações do WebView para sugestões de palavras e acentos ──
-        WebSettings ws = webView.getSettings();
-        ws.setMediaPlaybackRequiresUserGesture(false);
-        ws.setSaveFormData(true);
-        ws.setDatabaseEnabled(true);
-        ws.setDomStorageEnabled(true);
-        // Permite que o WebView aceite input de teclados com sugestão/autocomplete
-        ws.setJavaScriptEnabled(true);
-
-        webView.setFocusable(true);
-        webView.setFocusableInTouchMode(true);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            webView.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_YES);
-        }
-
-        // Habilita spell checker nativo do Android no WebView (API 26+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                // Força o WebView a usar o verificador ortográfico do sistema
-                android.view.textservice.TextServicesManager tsm =
-                    (android.view.textservice.TextServicesManager) getSystemService(TEXT_SERVICES_MANAGER_SERVICE);
-                if (tsm != null && tsm.isSpellCheckerEnabled()) {
-                    // O spell checker está habilitado no sistema — o WebView vai usá-lo
-                    android.util.Log.d("BibliaHarpa", "Spell checker do sistema: ativo");
-                }
-            } catch (Exception e) {
-                android.util.Log.d("BibliaHarpa", "Spell checker não disponível: " + e.getMessage());
-            }
-        }
+        webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
 
         // Callback do AudioForegroundService → JS
         AudioForegroundService.callback = new AudioForegroundService.Callback() {
@@ -155,6 +124,10 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        // Recebe os bytes do MP3 (já baixado/cacheado pelo JS) em base64,
+        // grava em arquivo local e manda o serviço nativo tocar — assim o
+        // áudio roda no MediaPlayer do Android, não no WebView, e sobrevive
+        // a tela apagada / app minimizado.
         @JavascriptInterface
         public void playHarpaBytes(String base64, String title, String info) {
             runOnUiThread(() -> {
@@ -182,6 +155,10 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
+        // Pede para o Android ignorar a otimização de bateria para o app.
+        // No MIUI/Xiaomi isso não substitui as configs próprias da MIUI
+        // (Autostart, "Sem restrições", travar nos recentes), mas ajuda e
+        // é a via oficial do Android — sem ela o MIUI mata o serviço mais fácil.
         @JavascriptInterface
         public void requestIgnoreBatteryOptimizations() {
             runOnUiThread(() -> {
@@ -298,35 +275,6 @@ public class MainActivity extends BridgeActivity {
         public void releaseWakeLock() { releaseWakeLockInternal(); }
 
         // ── Outros ────────────────────────────────────────────
-        @JavascriptInterface
-        public void setStatusBarColor(String color) {
-            runOnUiThread(() -> {
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        int cor = android.graphics.Color.parseColor(color);
-                        getWindow().setStatusBarColor(cor);
-
-                        // Ícones claros ou escuros conforme o fundo
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            int flags = getWindow().getDecorView().getSystemUiVisibility();
-                            // Calcula luminância
-                            double lum = (0.299 * android.graphics.Color.red(cor)
-                                        + 0.587 * android.graphics.Color.green(cor)
-                                        + 0.114 * android.graphics.Color.blue(cor)) / 255.0;
-                            if (lum > 0.55) {
-                                // Fundo claro → ícones escuros
-                                flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                            } else {
-                                // Fundo escuro → ícones claros
-                                flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-                            }
-                            getWindow().getDecorView().setSystemUiVisibility(flags);
-                        }
-                    }
-                } catch (Exception e) { e.printStackTrace(); }
-            });
-        }
-
         @JavascriptInterface
         public void exitApp() {
             runOnUiThread(() -> { finishAffinity(); System.exit(0); });
