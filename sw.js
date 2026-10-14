@@ -1,5 +1,5 @@
 // ── Bíblia JFA — Service Worker ──────────────────────────
-const CACHE_NAME = 'biblia-jfa-v4';
+const CACHE_NAME = 'biblia-jfa-v5';
 
 // Arquivos essenciais que ficam em cache (funcionam offline)
 const CACHE_FILES = [
@@ -42,31 +42,46 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// ── FETCH: serve do cache, busca rede como fallback ───────
+// ── FETCH ─────────────────────────────────────────────────
+// Casca do app (index.html, scripts pequenos): REDE PRIMEIRO, cache só se estiver
+// offline — assim toda atualização publicada aparece na hora, sem ficar presa em cache.
+// Dados grandes (Bíblia, Harpa) e ícones: CACHE PRIMEIRO (rápido e offline).
+function isAppShell(req) {
+  if (req.mode === 'navigate') return true;
+  const p = new URL(req.url).pathname;
+  if (/\/(Biblia_data_|Harpa_data)/.test(p)) return false;
+  return /\.(html|js|json)$/.test(p) || p.endsWith('/');
+}
+
 self.addEventListener('fetch', (event) => {
-  // Deixa requisições externas (fontes, ResponsiveVoice) passarem
-  if (!event.request.url.startsWith(self.location.origin)) {
+  const req = event.request;
+  if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
+
+  if (isAppShell(req)) {
+    event.respondWith(
+      fetch(req, { cache: 'no-cache' }).then((response) => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, clone));
+        }
+        return response;
+      }).catch(() =>
+        caches.match(req, { ignoreSearch: true }).then((c) => c || caches.match('./index.html'))
+      )
+    );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(req, { ignoreSearch: true }).then((cached) => {
       if (cached) return cached;
-
-      return fetch(event.request).then((response) => {
-        // Só faz cache de respostas válidas
-        if (!response || response.status !== 200 || response.type === 'opaque') {
-          return response;
+      return fetch(req).then((response) => {
+        if (response && response.status === 200 && response.type !== 'opaque') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, clone));
         }
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, clone);
-        });
         return response;
-      }).catch(() => {
-        // Offline e não tem cache: retorna index.html como fallback
-        return caches.match('./index.html');
-      });
+      }).catch(() => caches.match('./index.html'));
     })
   );
 });
