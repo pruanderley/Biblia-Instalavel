@@ -33,6 +33,27 @@ if service_tag not in content:
 else:
     print("  = AudioForegroundService (já existe)")
 
+# ── FileProvider próprio para compartilhar imagem do versículo ──
+import os
+if 'com.biblia.sharefiles' not in content and '.sharefiles' not in content:
+    provider = (
+        '        <provider\n'
+        '            android:name="androidx.core.content.FileProvider"\n'
+        '            android:authorities="${applicationId}.sharefiles"\n'
+        '            android:exported="false"\n'
+        '            android:grantUriPermissions="true">\n'
+        '            <meta-data\n'
+        '                android:name="android.support.FILE_PROVIDER_PATHS"\n'
+        '                android:resource="@xml/share_paths"/>\n'
+        '        </provider>\n'
+    )
+    content = content.replace("</application>", provider + "    </application>", 1)
+    print("  + FileProvider sharefiles declarado")
+xml_dir = "android/app/src/main/res/xml"
+os.makedirs(xml_dir, exist_ok=True)
+with open(xml_dir + "/share_paths.xml", "w", encoding="utf-8") as xf:
+    xf.write('<?xml version="1.0" encoding="utf-8"?>\n<paths>\n    <cache-path name="shared" path="shared/"/>\n</paths>\n')
+
 with open(MANIFEST, "w", encoding="utf-8") as f:
     f.write(content)
 

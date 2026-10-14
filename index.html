@@ -2251,6 +2251,7 @@
     <button class="vm-btn" onclick="vmNote()"><span class="vi">📝</span><span>Anotar</span></button>
     <button class="vm-btn" onclick="vmCopy()"><span class="vi">📋</span><span>Copiar</span></button>
     <button class="vm-btn" onclick="vmShare()"><span class="vi">↗</span><span>Compartilhar</span></button>
+    <button class="vm-btn" onclick="vmCompare()"><span class="vi">⚖️</span><span>Comparar</span></button>
     <button class="vm-btn" onclick="vmCrossRef()"><span class="vi">🔗</span><span>Referências</span></button>
     <button class="vm-btn" onclick="vmSearch()"><span class="vi">🔎</span><span>Pesquisar</span></button>
     <button class="vm-btn" onclick="vmVoice()"><span class="vi">🔊</span><span>Ouvir daqui</span></button>
@@ -2338,6 +2339,37 @@
       <div class="hl-swatch" data-color="brown"  onclick="applyHighlight('brown')"  title="Marrom"></div>
       <div class="hl-swatch" data-color="lime"   onclick="applyHighlight('lime')"   title="Lima"></div>
     </div>
+  </div>
+</div>
+
+<!-- COMPARTILHAR (texto ou imagem) -->
+<div id="share-panel" class="panel-overlay" onclick="closePanelIfOutside(event,'share-panel')">
+  <div class="panel" style="position:relative;max-height:92vh;overflow-y:auto;">
+    <div class="panel-handle"></div>
+    <div class="panel-title">↗ COMPARTILHAR</div>
+    <button class="panel-close" onclick="closePanel('share-panel')">✕</button>
+    <div id="share-choose" style="padding:6px 20px 20px;">
+      <button class="menu-item-btn" onclick="shareAsText()"><span>💬</span><span>Como texto</span></button>
+      <button class="menu-item-btn" onclick="shareAsImage()"><span>🖼️</span><span>Como imagem (papiro)</span></button>
+    </div>
+    <div id="share-preview" style="display:none;padding:6px 20px 22px;text-align:center;">
+      <img id="share-img" alt="Pré-visualização" style="width:100%;max-width:360px;border-radius:10px;border:1px solid var(--border);box-shadow:0 6px 24px rgba(0,0,0,0.35);">
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;">
+        <button class="menu-item-btn" style="width:auto;flex:1;justify-content:center;border:1px solid var(--accent-gold);border-radius:12px;" onclick="sendShareImage()"><span>📤</span><span>Enviar</span></button>
+        <button class="menu-item-btn" style="width:auto;flex:1;justify-content:center;border:1px solid var(--border);border-radius:12px;" onclick="backToShareChoose()"><span>↩</span><span>Voltar</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPARAR VERSÕES -->
+<div id="compare-panel" class="panel-overlay" onclick="closePanelIfOutside(event,'compare-panel')">
+  <div class="panel" style="position:relative;max-height:85vh;overflow-y:auto;">
+    <div class="panel-handle"></div>
+    <div class="panel-title">⚖️ COMPARAR VERSÕES</div>
+    <button class="panel-close" onclick="closePanel('compare-panel')">✕</button>
+    <div id="compare-ref" style="text-align:center;font-family:'Cinzel',serif;color:var(--accent-gold);font-size:14px;letter-spacing:1px;margin:2px 20px 10px;"></div>
+    <div id="compare-list" style="padding:0 16px 22px;"></div>
   </div>
 </div>
 
@@ -3035,7 +3067,172 @@ function getSelectedText() {
 
 function vmShare() {
   hideVerseMenu();
+  if (selectedVerses.length === 0) { showToast('Selecione um versículo'); return; }
+  backToShareChoose();
+  openPanel('share-panel');
+}
+
+function shareAsText() {
+  closePanel('share-panel');
   shareSelected();
+}
+
+function backToShareChoose() {
+  document.getElementById('share-choose').style.display = '';
+  document.getElementById('share-preview').style.display = 'none';
+}
+
+// ── Texto + referência separados (usado pela imagem e pela comparação) ──
+function getSelectedParts(verseList) {
+  var sorted = (verseList || selectedVerses).slice().sort(function(a, b) { return a - b; });
+  if (!sorted.length) return null;
+  var book = bibleData[currentBook];
+  var first = sorted[0] + 1, last = sorted[sorted.length - 1] + 1;
+  return {
+    sorted: sorted,
+    bookIdx: currentBook,
+    chIdx: currentChapter,
+    ref: book.name + ' ' + (currentChapter + 1) + ':' + (first === last ? first : first + '-' + last)
+  };
+}
+
+// ── COMPARAR VERSÕES ──────────────────────────
+function vmCompare() {
+  hideVerseMenu();
+  var P = getSelectedParts();
+  if (!P) { showToast('Selecione um versículo'); return; }
+  var BV = (typeof BibleVersionsSimple !== 'undefined') ? BibleVersionsSimple : null;
+  var names = (BV && BV.versionOrder || []).filter(function(n) { return BV.versions[n]; });
+  if (names.length < 2) { showToast('Só há uma versão carregada'); return; }
+  document.getElementById('compare-ref').textContent = P.ref;
+  var html = names.map(function(n) {
+    var bk = BV.versions[n][P.bookIdx];
+    var chap = bk && bk.chapters[P.chIdx];
+    var txt = chap ? P.sorted.map(function(i) {
+      return (P.sorted.length > 1 ? '<sup style="color:var(--accent-gold);font-size:10px;">' + (i + 1) + '</sup> ' : '') + (chap[i] || '');
+    }).join(' ') : '—';
+    var cur = n === BV.currentVersion;
+    return '<div style="background:var(--bg-card);border:1px solid ' + (cur ? 'var(--accent-gold)' : 'var(--border)') +
+      ';border-radius:12px;padding:12px 14px;margin-bottom:10px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+      '<span style="font-family:\'Cinzel\',serif;font-weight:700;font-size:13px;letter-spacing:1px;color:var(--accent-gold);">' + n + (cur ? ' ✓' : '') + '</span>' +
+      (cur ? '' : '<button onclick="compareUseVersion(\'' + n + '\')" style="background:none;border:1px solid var(--border);color:var(--text-secondary);border-radius:8px;padding:3px 10px;font-size:11px;font-family:\'Lato\',sans-serif;cursor:pointer;">Usar esta</button>') +
+      '</div><div style="font-family:\'EB Garamond\',Georgia,serif;font-size:17px;line-height:1.5;color:var(--text-primary);">' + txt + '</div></div>';
+  }).join('');
+  document.getElementById('compare-list').innerHTML = html;
+  _clearSelection();
+  openPanel('compare-panel');
+}
+
+function compareUseVersion(n) {
+  closePanel('compare-panel');
+  try { BibleVersionsSimple.switchVersion(n); } catch(e) {}
+}
+
+// ── COMPARTILHAR COMO IMAGEM (papiro) ─────────
+var _shareImgDataUrl = null, _shareImgText = '';
+
+function _wrapLines(ctx, text, maxW) {
+  var words = text.split(/\s+/), lines = [], cur = '';
+  words.forEach(function(w) {
+    var t = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+function _drawPapyrus(ctx, W, H) {
+  var g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, '#f3e4b8'); g.addColorStop(0.5, '#e6cf98'); g.addColorStop(1, '#d4b878');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // fibras horizontais e manchas (pseudo-aleatório fixo, sempre igual)
+  var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  for (var i = 0; i < 260; i++) {
+    ctx.strokeStyle = 'rgba(120,85,30,' + (0.03 + rnd() * 0.06) + ')';
+    ctx.lineWidth = 1 + rnd() * 2;
+    var y = rnd() * H, x = rnd() * W;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 80 + rnd() * 260, y + (rnd() - 0.5) * 6); ctx.stroke();
+  }
+  for (var j = 0; j < 90; j++) {
+    var rg = ctx.createRadialGradient(0, 0, 0, 0, 0, 30 + rnd() * 70);
+    rg.addColorStop(0, 'rgba(140,100,40,0.07)'); rg.addColorStop(1, 'rgba(140,100,40,0)');
+    ctx.save(); ctx.translate(rnd() * W, rnd() * H); ctx.fillStyle = rg; ctx.fillRect(-100, -100, 200, 200); ctx.restore();
+  }
+  // vinheta escura nas bordas
+  var v = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.78);
+  v.addColorStop(0, 'rgba(90,55,15,0)'); v.addColorStop(1, 'rgba(90,55,15,0.38)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  // moldura dupla dourada
+  ctx.strokeStyle = '#8a5f1c'; ctx.lineWidth = 6; ctx.strokeRect(46, 46, W - 92, H - 92);
+  ctx.strokeStyle = '#b8862e'; ctx.lineWidth = 2; ctx.strokeRect(62, 62, W - 124, H - 124);
+}
+
+async function shareAsImage() {
+  var P = getSelectedParts();
+  if (!P) { closePanel('share-panel'); showToast('Selecione um versículo'); return; }
+  var chap = bibleData[P.bookIdx].chapters[P.chIdx];
+  var text = P.sorted.map(function(i) {
+    return (P.sorted.length > 1 ? (i + 1) + ' ' : '') + chap[i];
+  }).join(' ');
+  var ver = (typeof BibleVersionsSimple !== 'undefined' && BibleVersionsSimple.currentVersion) || '';
+  try { await document.fonts.load('600 40px "EB Garamond"'); await document.fonts.load('700 30px "Cinzel"'); } catch(e) {}
+  var W = 1080, H = 1350;
+  var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  var ctx = cv.getContext('2d');
+  _drawPapyrus(ctx, W, H);
+  var serif = '"EB Garamond", Georgia, "Times New Roman", serif';
+  var maxW = W - 280, top = 230, bottom = H - 330, size = 70, lines, lh;
+  for (; size >= 28; size -= 2) {
+    ctx.font = 'italic 500 ' + size + 'px ' + serif;
+    lines = _wrapLines(ctx, '“' + text + '”', maxW);
+    lh = size * 1.38;
+    if (lines.length * lh <= bottom - top) break;
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  // cruz no topo
+  ctx.fillStyle = '#8a5f1c'; ctx.font = '700 64px ' + serif; ctx.fillText('✝', W / 2, 165);
+  ctx.fillStyle = '#3b2a14'; ctx.font = 'italic 500 ' + size + 'px ' + serif;
+  var blockH = lines.length * lh, y = top + ((bottom - top) - blockH) / 2 + size * 0.9;
+  lines.forEach(function(l) { ctx.fillText(l, W / 2, y); y += lh; });
+  // linha ornamental, referência e rodapé
+  ctx.strokeStyle = '#b8862e'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W / 2 - 140, H - 270); ctx.lineTo(W / 2 + 140, H - 270); ctx.stroke();
+  ctx.fillStyle = '#6b4510'; ctx.font = '700 44px "Cinzel", ' + serif;
+  ctx.fillText('— ' + P.ref + (ver ? ' (' + ver + ')' : ''), W / 2, H - 205);
+  ctx.fillStyle = 'rgba(80,55,20,0.75)'; ctx.font = '500 28px "Cinzel", ' + serif;
+  ctx.fillText('Bíblia Harpa Offline', W / 2, H - 120);
+
+  _shareImgDataUrl = cv.toDataURL('image/png');
+  _shareImgText = text + '\n' + P.ref;
+  document.getElementById('share-img').src = _shareImgDataUrl;
+  document.getElementById('share-choose').style.display = 'none';
+  document.getElementById('share-preview').style.display = '';
+}
+
+async function sendShareImage() {
+  if (!_shareImgDataUrl) return;
+  var fname = 'versiculo.png';
+  try {
+    if (window.Android && window.Android.shareImage) {
+      window.Android.shareImage(_shareImgDataUrl.split(',')[1], fname);
+      closePanel('share-panel'); _clearSelection(); return;
+    }
+    var blob = await (await fetch(_shareImgDataUrl)).blob();
+    var file = new File([blob], fname, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else {
+      var a = document.createElement('a');
+      a.href = _shareImgDataUrl; a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      showToast('Imagem salva');
+    }
+    closePanel('share-panel'); _clearSelection();
+  } catch(e) {
+    if (e && e.name === 'AbortError') return;
+    showToast('Não foi possível compartilhar a imagem');
+  }
 }
 
 function shareSelected() {
