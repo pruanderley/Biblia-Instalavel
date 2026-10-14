@@ -2214,7 +2214,7 @@
     <div class="vd-text" id="vd-text"></div>
     <div class="vd-ref" id="vd-ref"></div>
     <button class="vd-share-btn" onclick="copyVerseDay()">📋 Copiar</button>
-    <button class="vd-share-btn" style="background:rgba(37,211,102,0.15);border-color:#25d166;color:#25d166;" onclick="shareVerseDay()">↗ WhatsApp</button>
+    <button class="vd-share-btn" style="background:rgba(37,211,102,0.15);border-color:#25d166;color:#25d166;" onclick="shareVerseDay()">↗ Compartilhar</button>
   </div>
 </div>
 
@@ -3168,15 +3168,13 @@ function _drawPapyrus(ctx, W, H) {
   ctx.strokeStyle = '#b8862e'; ctx.lineWidth = 2; ctx.strokeRect(62, 62, W - 124, H - 124);
 }
 
-async function shareAsImage() {
-  var P = getSelectedParts();
-  if (!P) { closePanel('share-panel'); showToast('Selecione um versículo'); return; }
-  var chap = bibleData[P.bookIdx].chapters[P.chIdx];
-  var text = P.sorted.map(function(i) {
-    return (P.sorted.length > 1 ? (i + 1) + ' ' : '') + chap[i];
-  }).join(' ');
-  var ver = (typeof BibleVersionsSimple !== 'undefined' && BibleVersionsSimple.currentVersion) || '';
-  try { await document.fonts.load('600 40px "EB Garamond"'); await document.fonts.load('700 30px "Cinzel"'); } catch(e) {}
+async function _buildVerseImage(text, refStr) {
+  try {
+    await Promise.race([
+      Promise.all([document.fonts.load('600 40px "EB Garamond"'), document.fonts.load('700 30px "Cinzel"')]),
+      new Promise(function(r) { setTimeout(r, 1500); })
+    ]);
+  } catch(e) {}
   var W = 1080, H = 1350;
   var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   var ctx = cv.getContext('2d');
@@ -3190,49 +3188,62 @@ async function shareAsImage() {
     if (lines.length * lh <= bottom - top) break;
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  // cruz no topo
   ctx.fillStyle = '#8a5f1c'; ctx.font = '700 64px ' + serif; ctx.fillText('✝', W / 2, 165);
   ctx.fillStyle = '#3b2a14'; ctx.font = 'italic 500 ' + size + 'px ' + serif;
   var blockH = lines.length * lh, y = top + ((bottom - top) - blockH) / 2 + size * 0.9;
   lines.forEach(function(l) { ctx.fillText(l, W / 2, y); y += lh; });
-  // linha ornamental, referência e rodapé
   ctx.strokeStyle = '#b8862e'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(W / 2 - 140, H - 270); ctx.lineTo(W / 2 + 140, H - 270); ctx.stroke();
   ctx.fillStyle = '#6b4510'; ctx.font = '700 44px "Cinzel", ' + serif;
-  ctx.fillText('— ' + P.ref + (ver ? ' (' + ver + ')' : ''), W / 2, H - 205);
+  ctx.fillText('— ' + refStr, W / 2, H - 205);
   ctx.fillStyle = 'rgba(80,55,20,0.75)'; ctx.font = '500 28px "Cinzel", ' + serif;
   ctx.fillText('Bíblia Harpa Offline', W / 2, H - 120);
+  return cv.toDataURL('image/png');
+}
 
-  _shareImgDataUrl = cv.toDataURL('image/png');
-  _shareImgText = text + '\n' + P.ref;
+async function shareAsImage() {
+  var P = getSelectedParts();
+  if (!P) { closePanel('share-panel'); showToast('Selecione um versículo'); return; }
+  var chap = bibleData[P.bookIdx].chapters[P.chIdx];
+  var text = P.sorted.map(function(i) {
+    return (P.sorted.length > 1 ? (i + 1) + ' ' : '') + chap[i];
+  }).join(' ');
+  var ver = (typeof BibleVersionsSimple !== 'undefined' && BibleVersionsSimple.currentVersion) || '';
+  _shareImgDataUrl = await _buildVerseImage(text, P.ref + (ver ? ' (' + ver + ')' : ''));
   document.getElementById('share-img').src = _shareImgDataUrl;
   document.getElementById('share-choose').style.display = 'none';
   document.getElementById('share-preview').style.display = '';
 }
 
-async function sendShareImage() {
-  if (!_shareImgDataUrl) return;
+// Envia um dataURL PNG pelo compartilhamento do sistema (APK, PWA ou download)
+async function _sendImageDataUrl(dataUrl) {
   var fname = 'versiculo.png';
   try {
     if (window.Android && window.Android.shareImage) {
-      window.Android.shareImage(_shareImgDataUrl.split(',')[1], fname);
-      closePanel('share-panel'); _clearSelection(); return;
+      window.Android.shareImage(dataUrl.split(',')[1], fname);
+      return true;
     }
-    var blob = await (await fetch(_shareImgDataUrl)).blob();
+    var blob = await (await fetch(dataUrl)).blob();
     var file = new File([blob], fname, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file] });
     } else {
       var a = document.createElement('a');
-      a.href = _shareImgDataUrl; a.download = fname;
+      a.href = dataUrl; a.download = fname;
       document.body.appendChild(a); a.click(); a.remove();
       showToast('Imagem salva');
     }
-    closePanel('share-panel'); _clearSelection();
+    return true;
   } catch(e) {
-    if (e && e.name === 'AbortError') return;
+    if (e && e.name === 'AbortError') return false;
     showToast('Não foi possível compartilhar a imagem');
+    return false;
   }
+}
+
+async function sendShareImage() {
+  if (!_shareImgDataUrl) return;
+  if (await _sendImageDataUrl(_shareImgDataUrl)) { closePanel('share-panel'); _clearSelection(); }
 }
 
 function shareSelected() {
@@ -3246,13 +3257,17 @@ function shareSelected() {
   _clearSelection();
 }
 
-function shareVerseDay() {
-  const v   = _versiculosDoDia[_currentVerseDayIdx];
-  const msg = v[3] + '\n' + v[4].replace(':', '.');
-  if (navigator.share) {
-    navigator.share({ text: msg }).catch(() => {});
-  } else {
-    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+async function shareVerseDay() {
+  const v = _vdCurrent || _getVerseOfDay();
+  showToast('Preparando imagem…');
+  try {
+    const img = await _buildVerseImage(v[3], v[4]);
+    await _sendImageDataUrl(img);
+  } catch(e) {
+    // plano B: texto simples
+    const msg = v[3] + '\n' + v[4].replace(':', '.');
+    if (navigator.share) { navigator.share({ text: msg }).catch(() => {}); }
+    else { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); }
   }
 }
 
@@ -4358,13 +4373,47 @@ const _versiculosDoDia = [
   [18, 120, 0, "Elevo os meus olhos para os montes: de onde me virá o socorro?", "Salmos 121:1"],
 ];
 
+// Lista ampla de versículos (livro, capítulo, versículo — índices a partir de 0).
+// O texto vem da versão da Bíblia ativa no app. São 480 versículos diferentes,
+// embaralhados sempre na mesma ordem, então NÃO há repetição por mais de 480 dias.
+const _VD_REFS = [[0,0,0],[0,0,26],[0,0,30],[0,1,17],[0,11,1],[0,14,0],[0,27,14],[0,49,19],[1,2,13],[1,13,13],[1,14,1],[1,19,2],[1,19,11],[1,22,24],[1,32,13],[2,18,17],[2,25,11],[3,5,23],[3,5,24],[3,5,25],[3,22,18],[3,13,7],[4,3,28],[4,5,4],[4,5,5],[4,6,8],[4,7,2],[4,27,1],[4,29,18],[4,30,5],[4,30,7],[4,32,26],[5,0,4],[5,0,7],[5,0,8],[5,23,14],[6,5,11],[7,0,15],[8,1,1],[8,11,23],[8,15,6],[8,16,46],[9,21,1],[9,21,30],[10,7,55],[10,17,20],[11,5,15],[12,15,10],[12,15,33],[12,28,10],[13,6,13],[13,15,8],[13,19,14],[15,7,9],[16,3,13],[17,0,20],[17,4,16],[17,18,24],[17,22,9],[17,41,1],[18,0,0],[18,0,1],[18,0,2],[18,3,7],[18,7,2],[18,8,9],[18,15,7],[18,15,10],[18,17,1],[18,18,0],[18,18,13],[18,19,6],[18,22,0],[18,22,3],[18,22,5],[18,23,0],[18,24,3],[18,24,4],[18,26,0],[18,26,3],[18,26,13],[18,27,6],[18,28,10],[18,29,4],[18,30,23],[18,31,7],[18,32,11],[18,33,0],[18,33,7],[18,33,17],[18,33,18],[18,36,3],[18,36,4],[18,36,6],[18,36,22],[18,39,0],[18,39,1],[18,41,0],[18,41,10],[18,45,0],[18,45,9],[18,47,13],[18,49,14],[18,50,9],[18,54,21],[18,55,2],[18,61,0],[18,61,7],[18,62,0],[18,65,15],[18,67,18],[18,72,25],[18,83,9],[18,83,10],[18,85,4],[18,89,11],[18,90,0],[18,90,1],[18,90,10],[18,91,0],[18,93,18],[18,94,5],[18,95,0],[18,99,3],[18,99,4],[18,102,0],[18,102,1],[18,102,7],[18,102,11],[18,106,0],[18,110,9],[18,111,6],[18,112,2],[18,115,0],[18,117,0],[18,117,5],[18,117,23],[18,118,8],[18,118,10],[18,118,104],[18,118,129],[18,120,0],[18,120,1],[18,120,6],[18,120,7],[18,121,0],[18,125,2],[18,126,0],[18,129,4],[18,132,0],[18,137,7],[18,138,13],[18,138,22],[18,144,2],[18,144,17],[18,145,4],[18,146,2],[18,149,5],[19,0,6],[19,2,4],[19,2,5],[19,2,8],[19,2,12],[19,3,22],[19,9,11],[19,10,24],[19,11,24],[19,13,25],[19,14,0],[19,15,2],[19,15,8],[19,16,16],[19,17,9],[19,17,20],[19,17,23],[19,18,20],[19,21,5],[19,26,16],[19,28,24],[19,30,29],[20,2,0],[20,2,10],[20,3,8],[20,11,12],[21,1,3],[22,0,17],[22,8,5],[22,25,2],[22,29,14],[22,29,20],[22,39,7],[22,39,27],[22,39,28],[22,39,30],[22,40,9],[22,40,12],[22,42,0],[22,42,1],[22,42,18],[22,44,21],[22,45,3],[22,52,4],[22,52,5],[22,53,9],[22,54,5],[22,54,7],[22,54,10],[22,57,10],[22,60,0],[22,64,23],[23,16,6],[23,28,10],[23,28,12],[23,30,2],[23,31,26],[23,32,2],[24,2,21],[24,2,22],[24,2,24],[25,35,25],[26,2,16],[26,11,2],[27,5,2],[27,9,11],[28,1,24],[28,1,27],[29,4,13],[31,1,8],[32,5,7],[32,6,6],[33,0,6],[34,1,3],[34,2,16],[34,2,18],[35,2,16],[36,1,8],[37,3,5],[38,2,9],[39,3,3],[39,4,2],[39,4,5],[39,4,6],[39,4,7],[39,4,8],[39,4,13],[39,4,15],[39,4,43],[39,5,5],[39,5,8],[39,5,13],[39,5,18],[39,5,19],[39,5,20],[39,5,24],[39,5,32],[39,5,33],[39,6,6],[39,6,11],[39,6,23],[39,8,36],[39,9,31],[39,10,27],[39,10,28],[39,15,23],[39,16,19],[39,17,19],[39,18,25],[39,21,36],[39,21,38],[39,23,34],[39,27,18],[39,27,19],[40,0,14],[40,8,22],[40,9,26],[40,9,44],[40,10,23],[40,11,29],[40,15,14],[41,0,36],[41,0,44],[41,1,10],[41,5,30],[41,5,35],[41,5,37],[41,8,22],[41,9,26],[41,10,8],[41,10,27],[41,11,31],[41,14,6],[41,17,0],[41,18,9],[41,20,32],[42,0,0],[42,0,11],[42,0,13],[42,0,28],[42,2,15],[42,2,16],[42,3,23],[42,5,34],[42,5,36],[42,7,11],[42,7,31],[42,9,9],[42,9,10],[42,9,26],[42,10,24],[42,10,25],[42,12,33],[42,12,34],[42,13,0],[42,13,1],[42,13,5],[42,13,12],[42,13,14],[42,13,15],[42,13,26],[42,14,4],[42,14,6],[42,14,8],[42,14,11],[42,14,12],[42,15,32],[42,16,2],[42,19,28],[42,19,30],[43,0,7],[43,1,37],[43,3,11],[43,15,30],[43,16,27],[43,19,34],[44,0,15],[44,2,22],[44,4,0],[44,4,4],[44,4,7],[44,5,22],[44,7,0],[44,7,13],[44,7,17],[44,7,25],[44,7,27],[44,7,30],[44,7,36],[44,7,37],[44,9,8],[44,9,12],[44,9,16],[44,11,0],[44,11,1],[44,11,11],[44,11,20],[44,12,7],[44,14,3],[44,14,12],[45,0,17],[45,1,8],[45,5,18],[45,9,12],[45,12,3],[45,12,6],[45,12,12],[45,14,9],[45,14,56],[45,14,57],[45,15,12],[45,15,13],[46,0,2],[46,2,16],[46,3,15],[46,3,17],[46,4,6],[46,4,16],[46,8,6],[46,11,8],[46,12,10],[47,1,19],[47,4,0],[47,4,21],[47,5,1],[47,5,8],[48,0,2],[48,1,7],[48,1,9],[48,2,19],[48,3,1],[48,3,31],[48,4,1],[48,4,7],[48,5,9],[48,5,10],[48,5,17],[49,0,5],[49,1,2],[49,1,4],[49,2,13],[49,3,3],[49,3,5],[49,3,6],[49,3,7],[49,3,10],[49,3,12],[49,3,18],[50,0,16],[50,1,5],[50,2,1],[50,2,11],[50,2,13],[50,2,14],[50,2,15],[50,2,22],[50,3,1],[51,4,15],[51,4,16],[51,4,17],[51,4,20],[52,2,2],[53,0,14],[53,1,4],[53,3,11],[53,5,5],[53,5,11],[54,0,6],[54,1,14],[54,2,15],[54,3,6],[55,1,10],[55,2,4],[57,3,11],[57,3,15],[57,9,22],[57,9,23],[57,10,0],[57,10,5],[57,11,0],[57,12,4],[57,12,5],[57,12,7],[57,12,14],[58,0,1],[58,0,4],[58,0,11],[58,0,16],[58,0,21],[58,3,6],[58,3,7],[58,3,9],[58,4,15],[59,0,2],[59,1,8],[59,2,14],[59,3,7],[59,4,5],[59,4,6],[59,4,9],[60,0,2],[60,2,8],[60,2,17],[61,0,6],[61,0,8],[61,2,0],[61,2,17],[61,3,3],[61,3,7],[61,3,9],[61,3,15],[61,3,17],[61,3,18],[61,4,3],[61,4,13],[64,0,23],[65,0,7],[65,2,7],[65,2,19],[65,20,3],[65,21,11],[65,21,19]];
+let _vdCurrent = null;
+
+function _vdOrder() {
+  const n = _VD_REFS.length, ord = [];
+  for (let i = 0; i < n; i++) ord.push(i);
+  let seed = 20260101;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    const t = ord[i]; ord[i] = ord[j]; ord[j] = t;
+  }
+  return ord;
+}
+
+function _getVerseOfDay() {
+  // nº do dia no horário local (muda à meia-noite do usuário)
+  const now = new Date();
+  const dayNum = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+  const ord = _vdOrder();
+  const start = dayNum % ord.length;
+  // tenta o do dia; se o texto não existir nesta versão, passa ao próximo
+  for (let k = 0; k < ord.length; k++) {
+    const r = _VD_REFS[ord[(start + k) % ord.length]];
+    try {
+      const bk = bibleData[r[0]];
+      const txt = bk.chapters[r[1]][r[2]];
+      if (txt && txt.trim()) return [r[0], r[1], r[2], txt.trim(), bk.name + ' ' + (r[1] + 1) + ':' + (r[2] + 1)];
+    } catch (e) {}
+  }
+  return _versiculosDoDia[0]; // plano B (dados ainda não carregados)
+}
+
 let _currentVerseDayIdx = 0;
 
 function showVerseDay() {
-  // Escolhe verso determinístico pelo dia do ano (mesmo verso o dia todo)
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(),0,0)) / 86400000);
-  _currentVerseDayIdx = dayOfYear % _versiculosDoDia.length;
-  const v = _versiculosDoDia[_currentVerseDayIdx];
+  // Mesmo verso o dia todo; muda a cada dia, sem repetir (ver _VD_REFS)
+  const v = _vdCurrent = _getVerseOfDay();
   document.getElementById('vd-text').textContent = '"' + v[3] + '"';
   document.getElementById('vd-ref').textContent = '— ' + v[4];
   document.getElementById('verse-day-overlay').style.display = 'flex';
@@ -4389,7 +4438,7 @@ document.getElementById('verse-day-overlay').addEventListener('click', function(
 });
 
 function copyVerseDay() {
-  const v = _versiculosDoDia[_currentVerseDayIdx];
+  const v = _vdCurrent || _getVerseOfDay();
   const text = v[3] + '\n' + v[4].replace(':', '.');
   const btn = document.querySelector('.vd-share-btn');
   try {
